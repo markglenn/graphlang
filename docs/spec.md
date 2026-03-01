@@ -44,6 +44,18 @@ The built-in projection primitives (`section`, `card`, `grid`, `field`, `action`
 
 The unifying principle: **the graph excels at composing and wiring things, not at defining their internals.** Boundaries are typed and checkable. Implementations behind those boundaries are opaque. The type checker validates every connection point.
 
+### Testability by Design
+
+The type checker catches structural errors. Tests catch behavioral errors. Together they form the complete feedback loop that makes AI-assisted development reliable. Neither is optional.
+
+GraphLang's design makes testability natural at every layer:
+
+- **Compute modules are pure functions.** No side effects, no external state, no I/O. Call them with inputs, assert the outputs. Tests require zero setup and zero teardown. A project with 50 compute modules should have all compute tests complete in under 100ms.
+- **Behaviors are declarative sequences of typed steps.** Each phase — preconditions, compute, adapter calls, mutations — operates against a known state. Behaviors can be tested against an in-memory graph without a running server, without network calls, and without filesystem access.
+- **The graph is a query target.** SQLite in-memory is the test substrate. No disk, no network. The type checker's own tests use fixture graph definitions parsed into `:memory:` databases. Behavior tests use seeded entity data in the same substrate. Both are fast by construction.
+
+The feedback loop target: **under 1 second after every save**, with a ceiling of **3 seconds on large projects**. This is a first-class design constraint, not a performance optimization to address later. Architecture decisions — synchronous SQLite access, pure compute functions, in-memory test isolation, incremental type checking — are all made with this target in mind.
+
 ### What This Prototype Should Prove
 
 1. The type system catches cross-boundary errors that traditional tooling misses
@@ -53,6 +65,7 @@ The unifying principle: **the graph excels at composing and wiring things, not a
 5. Compute modules run identically on server and client (same TypeScript, same runtime)
 6. A compiler can generate client-side JavaScript from projection nodes
 7. Changes to the graph are surgical — modify one node, rebuild, the app updates
+8. The type check + test feedback loop completes in under 3 seconds on the prototype application
 
 ---
 
@@ -2408,9 +2421,199 @@ export function validate_password_strength(password: string): { valid: boolean; 
 
 ---
 
-## 6. Graph Store (SQLite)
+## 6. Testing
 
-### 6.1 Schema
+Testing is a first-class concern in GraphLang, not an afterthought. The framework's design makes each layer independently testable, and the tooling enforces fast feedback by default.
+
+### 6.1 Test Layers
+
+| Layer | What's Tested | Substrate | Speed |
+|-------|--------------|-----------|-------|
+| Compute modules | Pure function correctness | None (direct import) | < 100ms for full suite |
+| Type checker | Error detection and messages | In-memory SQLite | < 500ms for full suite |
+| Constraints | Constraint evaluation logic | In-memory SQLite | Fast |
+| Behaviors | Full precondition → compute → mutate pipeline | In-memory SQLite, stubbed adapters | Fast |
+| Integration | Full graph → server → response | In-memory SQLite, test HTTP client | Seconds |
+
+Each layer runs independently. Compute tests don't touch SQLite. Type checker tests don't start a server. Behavior tests don't make network calls.
+
+### 6.2 Compute Module Tests
+
+Compute modules are pure functions. Their tests require no setup:
+
+```typescript
+// tests/compute/calculate_order_total.test.ts
+import { describe, it, expect } from 'vitest';
+import { calculate_order_total } from '../../examples/ecommerce/compute/calculate_order_total';
+
+describe('calculate_order_total', () => {
+  it('sums line items', () => {
+    const result = calculate_order_total({
+      items: [
+        { unit_price: 10.00, quantity: 2 },
+        { unit_price: 5.50, quantity: 1 },
+      ]
+    });
+    expect(result.total).toBe(25.50);
+  });
+
+  it('rounds to two decimal places', () => {
+    const result = calculate_order_total({
+      items: [{ unit_price: 0.1, quantity: 3 }]
+    });
+    expect(result.total).toBe(0.30);
+  });
+});
+```
+
+No mocks. No fixtures. No async. The purity constraint that makes compute modules safe for the runtime is exactly what makes them trivially testable.
+
+### 6.3 Type Checker Tests
+
+Type checker tests verify that specific graph definitions produce specific errors — or none. Each test parses a DSL snippet into an in-memory SQLite graph and runs the checker:
+
+```typescript
+// tests/typechecker/pass-behavior.test.ts
+import { describe, it, expect } from 'vitest';
+import { createTestGraph, runTypeChecker } from '../helpers';
+
+describe('behavior type checking', () => {
+  it('catches compute param name mismatch', () => {
+    const graph = createTestGraph(`
+      compute verify_password
+        input plaintext : string
+        input hash : string
+        output valid : boolean
+      end
+
+      behavior update_password
+        compute result = verify_password(
+          plain_text: $input.current_password,
+          hash: $target_user.password_hash
+        )
+      end
+    `);
+
+    const errors = runTypeChecker(graph);
+    expect(errors).toContainError({
+      code: 'behavior-compute-param-mismatch',
+      expected: 'plaintext',
+      received: 'plain_text',
+    });
+  });
+
+  it('passes when param names match', () => {
+    const graph = createTestGraph(`
+      compute verify_password
+        input plaintext : string
+        input hash : string
+        output valid : boolean
+      end
+
+      behavior update_password
+        compute result = verify_password(
+          plaintext: $input.current_password,
+          hash: $target_user.password_hash
+        )
+      end
+    `);
+
+    const errors = runTypeChecker(graph);
+    expect(errors).toHaveLength(0);
+  });
+});
+```
+
+`createTestGraph` parses the DSL snippet and writes it to a fresh `:memory:` SQLite database. Each test gets an isolated database — no shared state, no teardown needed. `runTypeChecker` executes all 10 passes synchronously against that database and returns the error list.
+
+### 6.4 Behavior Tests
+
+Behaviors are tested end-to-end using an in-memory graph and behavior executor. These tests verify the full precondition → compute → mutate pipeline against seeded entity state, with adapter calls stubbed:
+
+```typescript
+// tests/runtime/behavior.test.ts
+import { describe, it, expect, beforeEach } from 'vitest';
+import { createTestEnvironment } from '../helpers';
+
+describe('update_email', () => {
+  let env: TestEnvironment;
+
+  beforeEach(() => {
+    env = createTestEnvironment('examples/ecommerce');
+  });
+
+  it('updates the user email when valid', async () => {
+    const user = env.seed('User', {
+      email: 'old@example.com',
+      name: 'Test User',
+      role: 'customer',
+    });
+
+    const result = await env.executeBehavior('update_email',
+      { new_email: 'new@example.com' },
+      { auth: { user } }
+    );
+
+    expect(result.success).toBe(true);
+    expect(env.find('User', user.id).email).toBe('new@example.com');
+  });
+
+  it('rejects an invalid email format', async () => {
+    const user = env.seed('User', { email: 'old@example.com' });
+
+    const result = await env.executeBehavior('update_email',
+      { new_email: 'not-an-email' },
+      { auth: { user } }
+    );
+
+    expect(result.success).toBe(false);
+  });
+});
+```
+
+`createTestEnvironment` loads the application graph into an in-memory SQLite database. Adapter calls are automatically stubbed with no-op responses unless explicitly overridden with `env.stubAdapter(...)`. No server starts. No network calls are made.
+
+### 6.5 Watch Mode and Incremental Feedback
+
+The `graphlang dev` watcher maintains a dependency map to minimize re-work on every save:
+
+- **File → nodes**: which graph nodes are defined in this file
+- **Node → passes**: which type checker passes care about this node type
+- **Node → tests**: which test files exercise this node
+
+On save:
+1. Parse the changed file → identify which nodes changed
+2. Run only the type checker passes affected by those node types
+3. If type check passes → run only the tests associated with those nodes
+4. Report results
+
+A single behavior edit triggers Pass 5 (behavior type checking) plus the affected behavior's tests — typically under 200ms total. A compute module edit triggers Pass 3 plus that module's compute tests — typically under 50ms. A full re-check runs only when explicitly requested (`graphlang check`) or when a structural change affects many dependents (such as renaming an entity field).
+
+The goal is **under 1 second** from save to feedback on any targeted change. The ceiling is **3 seconds** for a full re-check on a large project.
+
+### 6.6 Test Helpers
+
+Three helpers cover the full test surface:
+
+**`createTestGraph(dsl: string): Database`**
+Parses a DSL snippet and writes it to a fresh in-memory SQLite database. Returns the database handle. Used in type checker tests.
+
+**`createTestEnvironment(appPath: string): TestEnvironment`**
+Loads a full application graph into an in-memory SQLite database. Provides:
+- `env.seed(entityType, data)` — insert entity data, returns the entity with generated fields
+- `env.find(entityType, id)` — query a single entity
+- `env.query(entityType, filters)` — query entities with filters
+- `env.executeBehavior(behaviorId, input, auth)` — run a behavior, returns `{ success, error, data }`
+- `env.stubAdapter(adapter, action, response)` — override an adapter action with a fixed response
+
+**`runTypeChecker(db: Database): TypeCheckError[]`**
+Runs all 10 type checker passes against the provided database and returns all errors and warnings. Used directly in type checker tests.
+
+---
+
+## 7. Graph Store (SQLite)
+
+### 7.1 Schema
 
 ```sql
 -- Graph structure (populated at build time from .graph files)
@@ -2456,7 +2659,7 @@ CREATE INDEX idx_nodes_type ON nodes(type);
 CREATE INDEX idx_entity_data_type ON entity_data(entity_type);
 ```
 
-### 6.2 Configuration
+### 7.2 Configuration
 
 ```typescript
 import Database from 'better-sqlite3';
@@ -2469,11 +2672,11 @@ db.pragma('cache_size = -64000');    // 64MB cache — entire graph fits in memo
 
 ---
 
-## 7. Client-Side Compilation
+## 8. Client-Side Compilation
 
 The compiler reads projection nodes and generates client-side JavaScript. No JS is hand-written by humans or AI.
 
-### 7.1 Compilation Mapping
+### 8.1 Compilation Mapping
 
 | Graph Construct | Generated JS |
 |----------------|-------------|
@@ -2493,19 +2696,19 @@ The compiler reads projection nodes and generates client-side JavaScript. No JS 
 | `component(x)` | Mount component JS, pass typed props, wire event emitters |
 | `derived q = query(...)` | `fetch` to query endpoint, cached, re-fetches when deps change |
 
-### 7.2 Generated JS Is a Build Artifact
+### 8.2 Generated JS Is a Build Artifact
 
 The generated JavaScript is never seen, edited, or maintained by anyone. It's a build artifact like a `.o` file from a C compiler. The source of truth is the projection node in the graph. The type checker validates the graph. The compiler emits correct JS from a valid graph.
 
-### 7.3 Server-Side Initial Render + Client Hydration
+### 8.3 Server-Side Initial Render + Client Hydration
 
 The server renders initial HTML from the projection. Generated JS hydrates the page — attaching event listeners, initializing state, enabling reactivity. This gives fast initial page loads with rich interactivity.
 
 ---
 
-## 8. Server Runtime
+## 9. Server Runtime
 
-### 8.1 Architecture
+### 9.1 Architecture
 
 ```
 HTTP Server (Hono)
@@ -2536,7 +2739,7 @@ HTTP Server (Hono)
   GET /css/:bundle.css → static file
 ```
 
-### 8.2 Behavior Executor
+### 9.2 Behavior Executor
 
 ```typescript
 async function executeBehavior(
@@ -2610,9 +2813,9 @@ async function executeBehavior(
 
 ---
 
-## 9. Build Pipeline
+## 10. Build Pipeline
 
-### 9.1 CLI Commands
+### 10.1 CLI Commands
 
 ```bash
 # Type-check only (fast inner loop for AI)
@@ -2632,20 +2835,22 @@ graphlang validate ./app/
 graphlang seed ./app/ --data ./seed.json
 ```
 
-### 9.2 Build Steps
+### 10.2 Build Steps
 
 1. **Parse** all `.graph` files → in-memory AST
 2. **Write to SQLite** → nodes and edges tables
 3. **Type Check** → query SQLite, validate all contracts, report errors
 4. **If errors → STOP.** Output all errors. Do not proceed.
-5. **Compile compute modules** → TypeScript compiler on compute sources
-6. **Compile Client JS** → projection compiler generates `.js` per projection (includes compute functions used client-side)
-7. **Lint CSS** → PostCSS plugin validates `data-gl-*` selectors against graph (warnings only)
-8. **Bundle CSS** → concatenate and minify CSS source files
-9. **Copy runtime** → shared `graphlang-runtime.js`
-9. **Report** → summary of nodes, edges, modules, generated files
+5. **Run tests** → execute compute, type checker, and behavior test suites; report failures
+6. **If test failures → STOP.** Output failures. Do not proceed.
+7. **Compile compute modules** → TypeScript compiler on compute sources
+8. **Compile Client JS** → projection compiler generates `.js` per projection (includes compute functions used client-side)
+9. **Lint CSS** → PostCSS plugin validates `data-gl-*` selectors against graph (warnings only)
+10. **Bundle CSS** → concatenate and minify CSS source files
+11. **Copy runtime** → shared `graphlang-runtime.js`
+12. **Report** → summary of nodes, edges, modules, generated files
 
-### 9.3 Output Structure
+### 10.3 Output Structure
 
 ```
 dist/
@@ -2661,7 +2866,7 @@ dist/
 
 ---
 
-## 10. Prototype Implementation Plan
+## 11. Prototype Implementation Plan
 
 ### Scope
 
@@ -2778,7 +2983,7 @@ This is the most important phase. The type checker is the product.
 
 ---
 
-## 11. Project Structure
+## 12. Project Structure
 
 ```
 graphlang/
@@ -2891,7 +3096,7 @@ graphlang/
 
 ---
 
-## 12. Dependencies
+## 13. Dependencies
 
 ```json
 {
@@ -2913,7 +3118,7 @@ graphlang/
 
 ---
 
-## 13. Success Criteria
+## 14. Success Criteria
 
 ### Type System (Primary)
 1. Type checker catches renamed fields, mismatched params, wrong types, missing required fields, invalid traversals — all with specific error messages
@@ -2921,22 +3126,29 @@ graphlang/
 3. AI (Claude) can read error output and fix the graph in ≤2 iterations
 4. JSON error output is parseable by AI tooling
 
+### Testing (Primary)
+5. Every compute module has tests; full compute test suite completes in under 100ms
+6. Type checker tests cover all 10 passes with both valid and invalid fixture graphs
+7. Behavior tests cover the happy path and key failure cases without network or disk I/O
+8. `graphlang check` (type check + test run) completes in under 3 seconds on the prototype application
+9. Watch mode delivers feedback in under 1 second for targeted single-file changes
+
 ### Runtime (Secondary)
-5. Server renders working HTML from projection nodes
-6. Client JS is generated from projections — no hand-written JS
-7. Compute modules run identically on server and client (same TypeScript, same runtime)
-8. Behaviors execute: preconditions → compute → adapters → mutations → effects
-9. Policies enforce access control
-10. Components render within projections with typed prop/event bindings validated by the type checker
-11. Adapter calls in behaviors execute with typed contracts and proper error handling
-12. Render compute modules inject format-typed, sanitized markup into projections
+10. Server renders working HTML from projection nodes
+11. Client JS is generated from projections — no hand-written JS
+12. Compute modules run identically on server and client (same TypeScript, same runtime)
+13. Behaviors execute: preconditions → compute → adapters → mutations → effects
+14. Policies enforce access control
+15. Components render within projections with typed prop/event bindings validated by the type checker
+16. Adapter calls in behaviors execute with typed contracts and proper error handling
+17. Render compute modules inject format-typed, sanitized markup into projections
 
 ### Thesis Validation (Ultimate)
-10. AI-modified graphs with type checking have a measurably lower error rate than AI-modified React code for equivalent changes
+18. AI-modified graphs with type checking have a measurably lower error rate than AI-modified React code for equivalent changes
 
 ---
 
-## 14. Open Questions
+## 15. Open Questions
 
 1. **Each block re-rendering.** Prototype uses innerHTML replacement when list data changes. Keyed DOM diffing with enter/exit/move detection is a future optimization.
 2. **Client-side query caching.** When derived values use `query()`, need loading states and cache invalidation. Prototype: fetch on mount, refetch when deps change, no cache.
@@ -2956,8 +3168,9 @@ graphlang/
 
 ---
 
-## 15. Future Directions
+## 16. Future Directions
 
+- **Test DSL** — declare behavior tests directly in `.graph` files with typed fixtures; the type checker validates fixture shapes, the test runner executes them; AI generates tests in the same language as the application
 - **Visual graph editor** — drag-and-drop with live type checking
 - **AI copilot** — natural language → graph modifications with type checker in the loop
 - **Graph diffing** — semantic diffs: "added entity Review with 4 fields"
