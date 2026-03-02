@@ -3,7 +3,9 @@
 ## Prototype Implementation Specification v0.7
 
 **Version:** 0.7
-**Author:** Mark @ AHEAD
+
+**Author:** Mark Glenn
+
 **Purpose:** Build a working prototype of an AI-native application framework. The core thesis: applications defined as typed graphs are more reliably authored and modified by AI than traditional codebases. The key differentiator is a comprehensive type system that catches errors at build time and produces error feedback specific enough for AI to self-correct. The framework handles extensibility — custom UI components, third-party integrations, complex rendering — through typed boundaries: the graph owns the wiring, opaque implementations live behind typed contracts, and the type checker validates every connection point.
 
 ---
@@ -73,9 +75,9 @@ The feedback loop target: **under 1 second after every save**, with a ceiling of
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                     Source Files                              │
+│                     Source Files                             │
 │                                                              │
-│  .graph files      .ts files       .css files    .js files   │
+│  .graph files      .ts files       .css files    .ts files   │
 │  (structure &      (compute —      (styling &    (component  │
 │   flow — DSL)      pure fns)       transitions)  impls)      │
 └──────┬─────────────────┬───────────────┬──────────────┬──────┘
@@ -110,15 +112,15 @@ The feedback loop target: **under 1 second after every save**, with a ceiling of
 └──────┬───────────────────────────┘     │              │
        │ if valid                        │              │
        ▼                                 ▼              ▼
-┌──────────────────────────────────────────────────────────────┐
-│                    Build / Bundle Step                        │
-│                                                              │
+┌─────────────────────────────────────────────────────────────┐
+│                    Build / Bundle Step                      │
+│                                                             │
 │  ┌──────────────────┐  ┌──────────────┐  ┌───────────────┐  │
 │  │ Server Bundle    │  │ Client JS    │  │ CSS Bundle    │  │
 │  │ (runtime +       │  │ (from projs  │  │ (PostCSS lint │  │
 │  │  compute fns)    │  │  + compute)  │  │  + bundle)    │  │
 │  └──────────────────┘  └──────────────┘  └───────────────┘  │
-└──────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Architectural Boundaries
@@ -1803,7 +1805,7 @@ A component is a reusable UI element with typed props flowing in and typed event
 ```
 component drag_drop_list
   description "Reorderable list with drag and drop"
-  source "components/drag_drop_list.js"
+  source "components/drag_drop_list.ts"
 
   prop items : list(record({
     id : uuid,
@@ -1821,7 +1823,7 @@ end
 
 component chart
   description "Data visualization chart"
-  source "components/chart.js"
+  source "components/chart.ts"
 
   prop data : list(record({
     label : string,
@@ -1835,7 +1837,7 @@ end
 
 component rich_text_editor
   description "WYSIWYG rich text editor"
-  source "components/rich_text_editor.js"
+  source "components/rich_text_editor.ts"
 
   prop content : text
   prop placeholder : string
@@ -1848,7 +1850,7 @@ end
 
 component data_table
   description "Sortable, filterable data table"
-  source "components/data_table.js"
+  source "components/data_table.ts"
 
   prop data : list(record({
     id : uuid
