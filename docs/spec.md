@@ -46,6 +46,25 @@ The built-in projection primitives (`section`, `card`, `grid`, `field`, `action`
 
 The unifying principle: **the graph excels at composing and wiring things, not at defining their internals.** Boundaries are typed and checkable. Implementations behind those boundaries are opaque. The type checker validates every connection point.
 
+### Tracked Impurity, Not Hidden Impurity
+
+The graph's type system provides strong guarantees — but four constructs weaken those guarantees by introducing opaque or unverified behavior. Like Rust's `unsafe` or Haskell's `IO`, GraphLang doesn't pretend these don't exist. Instead, it **tracks them explicitly** so developers and AI can see exactly where the guarantees thin out.
+
+The four impurity sources:
+
+1. **Adapter calls.** External I/O (Stripe, SendGrid, databases). The type system checks that you pass the right inputs and declare the right outputs, but it can't verify that the external service actually returns what the adapter declares. The response shape is a *promise*, not a *proof*.
+2. **Components.** Opaque DOM manipulation behind a typed prop/event boundary. The type system checks the wiring (props in, events out), but the component's internal behavior — what it renders, what side effects it triggers — is invisible to the graph.
+3. **`render(raw)`.** Unsanitized markup injection. The type system tracks that a compute module returns `render(raw)` instead of `render(html_safe)` or `render(svg)`, but it can't verify the markup is safe. This is the XSS escape hatch.
+4. **`json` type.** A type-system hole. Any field, parameter, or output typed as `json` bypasses structural checking. The type checker can't verify field access, shape compatibility, or subtyping on `json` values.
+
+**Impurity is inferred, not annotated.** The type checker detects impurity automatically by analyzing the graph — behaviors that call adapters are impure, projections that use components or `render(raw)` are impure. There's no `@impure` annotation in the DSL that could drift out of sync. The graph *is* the source of truth.
+
+**Impurity propagates.** A behavior that calls an adapter is impure. A listener that triggers an impure behavior is transitively impure. A projection whose action submits to an impure behavior is impure. The type checker traces these chains and marks every node that inherits impurity from its dependencies.
+
+**The impurity audit.** After all 10 type checking passes, the type checker produces an **impurity audit summary** — a structured report showing exactly how many behaviors, projections, and listeners are pure vs. impure, where each impurity originates, how it propagates, and how many `json` type holes exist. The audit prints on every build (passing or failing) so impurity is always visible, never hidden.
+
+The goal isn't to eliminate impurity — adapters and components are essential. The goal is to **minimize it, contain it, and make it visible**. A well-structured GraphLang application should have a high pure coverage percentage, with impurity concentrated in a small number of adapter-calling behaviors and component-using projections.
+
 ### Testability by Design
 
 The type checker catches structural errors. Tests catch behavioral errors. Together they form the complete feedback loop that makes AI-assisted development reliable. Neither is optional.
@@ -77,7 +96,7 @@ The feedback loop target: **under 1 second after every save**, with a ceiling of
 ┌──────────────────────────────────────────────────────────────┐
 │                     Source Files                             │
 │                                                              │
-│  .graph files      .ts files       .css files    .ts files   │
+│  .gln files      .ts files       .css files    .ts files   │
 │  (structure &      (compute —      (styling &    (component  │
 │   flow — DSL)      pure fns)       transitions)  impls)      │
 └──────┬─────────────────┬───────────────┬──────────────┬──────┘
@@ -228,6 +247,7 @@ interface TypeMap {
     target_entity: string | null;
     compute_results: Map<string, ResolvedType>;  // accumulated as compute steps execute
     available_at_mutate: Map<string, ResolvedType>;  // everything available when mutations run
+    impurity: ImpurityInfo;  // inferred by Pass 5 + Pass 8
   }>;
 
   // Projection binding types
@@ -239,7 +259,18 @@ interface TypeMap {
       fields: Map<string, ResolvedType>;
       target_entity: string | null;
     }>;
+    impurity: ImpurityInfo;  // inferred by Pass 8
   }>;
+
+  // Listener impurity tracking (inferred by Pass 8)
+  listeners: Map<string, {
+    event: string;
+    triggers_behavior: string;
+    impurity: ImpurityInfo;
+  }>;
+
+  // json type usage tracking (collected by Pass 8)
+  json_usages: JsonUsage[];
 }
 
 interface ResolvedType {
@@ -255,6 +286,30 @@ interface ResolvedType {
   constraints: string[];  // 'unique', 'required', 'generated', 'sensitive', 'immutable'
   min?: number;
   max?: number;
+}
+
+// Impurity source — why a node is impure
+type ImpuritySource =
+  | { kind: 'adapter_call'; adapter_id: string; action: string; behavior_id: string }
+  | { kind: 'component'; component_id: string; projection_id: string }
+  | { kind: 'render_raw'; compute_module: string; projection_id: string }
+  | { kind: 'json_type'; node_id: string; field_or_param: string }
+  | { kind: 'propagated'; from_node: string; chain: string[] };
+
+// Impurity metadata attached to behaviors, projections, and listeners
+interface ImpurityInfo {
+  is_pure: boolean;
+  sources: ImpuritySource[];  // empty when is_pure === true
+}
+
+// Tracks every usage of the `json` type across the graph
+interface JsonUsage {
+  node_id: string;
+  node_type: 'entity' | 'compute' | 'behavior' | 'adapter' | 'component';
+  field_or_param: string;
+  source_file: string;
+  source_line: number;
+  suggestion: string;  // e.g., "Consider record({ status: string, data: string }) if shape is known"
 }
 ```
 
@@ -281,7 +336,7 @@ bind data = all_orders
 The type checker reports subtyping errors with full context:
 
 ```
-ERROR [record-subtype-missing-field] projections.graph:45
+ERROR [record-subtype-missing-field] projections.gln:45
   Projection 'admin_dashboard', component 'chart':
   Prop 'data' expects record({ label: string, value: decimal }).
   Binding resolves to list of entity 'Order'.
@@ -324,11 +379,11 @@ Checks:
 
 Errors:
 ```
-ERROR [entity-duplicate-field] entities.graph:5
+ERROR [entity-duplicate-field] entities.gln:5
   Entity 'User' has duplicate field 'email' (lines 5 and 8).
   Remove one of the duplicate field definitions.
 
-ERROR [entity-invalid-annotation] entities.graph:7
+ERROR [entity-invalid-annotation] entities.gln:7
   Entity 'User', field 'name': @min(1) is not valid on type 'boolean'.
   @min is only valid on types: string, integer, decimal.
 ```
@@ -354,7 +409,7 @@ Checks:
 
 Errors:
 ```
-ERROR [edge-missing-entity] entities.graph:42
+ERROR [edge-missing-entity] entities.gln:42
   Edge 'OrderItem -> Products : belongs_to': target entity 'Products' does not exist.
   Did you mean 'Product'?
   Available entities: User, Product, Order, OrderItem
@@ -371,7 +426,7 @@ Checks:
 
 Errors:
 ```
-ERROR [compute-invalid-type] compute.graph:12
+ERROR [compute-invalid-type] compute.gln:12
   Compute module 'calculate_discount', input 'subtotal': type 'float' is not valid.
   Valid types: string, integer, decimal, boolean, uuid, timestamp, list(T), json
   Did you mean 'decimal'?
@@ -398,15 +453,15 @@ Checks:
 
 Errors:
 ```
-ERROR [constraint-invalid-traversal] constraints.graph:8
+ERROR [constraint-invalid-traversal] constraints.gln:8
   Constraint 'is_owner', traversal 'target_entity -> user -> id':
   Cannot traverse 'user' from entity 'Product'.
   Product has no 'user' edge.
   Available edges from Product: (none — Product has no outgoing belongs_to edges)
 
   This constraint is used by:
-    • policy 'owner_access' (policies.graph:3)
-    • behavior 'update_email' precondition (behaviors.graph:7)
+    • policy 'owner_access' (policies.gln:3)
+    • behavior 'update_email' precondition (behaviors.gln:7)
 
   If Product should have a user edge, add:
     edge Product -> User : belongs_to
@@ -475,18 +530,18 @@ Checks:
 
 Errors:
 ```
-ERROR [behavior-compute-param-mismatch] behaviors.graph:18
+ERROR [behavior-compute-param-mismatch] behaviors.gln:18
   Behavior 'update_password', compute step 'verify_result':
   Calling compute module 'verify_password' with param 'plain_text',
   but module expects 'plaintext'.
   
-  Module signature (compute.graph:8):
+  Module signature (compute.gln:8):
     input plaintext : string
     input hash : string
   
   Did you mean 'plaintext'?
 
-ERROR [behavior-mutate-type-mismatch] behaviors.graph:24
+ERROR [behavior-mutate-type-mismatch] behaviors.gln:24
   Behavior 'update_password', mutation '$target_user.password_hash = hash_result.hashed':
   Field 'User.password_hash' expects type 'string'.
   'hash_result.hashed' resolves to type 'string'.
@@ -498,16 +553,51 @@ ERROR [behavior-mutate-type-mismatch] behaviors.graph:24
   Available outputs from hash_password: hash (string)
   Did you mean 'hash_result.hash'?
 
-ERROR [behavior-mutate-generated] behaviors.graph:30
+ERROR [behavior-mutate-generated] behaviors.gln:30
   Behavior 'place_order', mutation '$new_order.id = ...':
   Field 'Order.id' is @generated and cannot be explicitly set.
   Remove this mutation — the runtime generates the id automatically.
 
-ERROR [behavior-missing-required] behaviors.graph:32
+ERROR [behavior-missing-required] behaviors.gln:32
   Behavior 'place_order', create(Order):
   Missing required field 'total'.
   Order requires: status (has default), total (MISSING), user (provided)
 ```
+
+**Impurity inference:**
+
+After all structural checks pass, Pass 5 infers impurity metadata for each behavior. This is not an error — it produces `ImpurityInfo` for Pass 8 and the post-pass audit.
+
+```sql
+-- Find behaviors that call adapters (directly impure)
+SELECT b.id, json_extract(ac.value, '$.adapter') as adapter_id,
+       json_extract(ac.value, '$.action') as action_name
+FROM nodes b, json_each(b.properties, '$.adapter_calls') ac
+WHERE b.type = 'behavior';
+
+-- Find behaviors that use render(raw) compute modules
+SELECT b.id, json_extract(cs.value, '$.module') as module_id
+FROM nodes b, json_each(b.properties, '$.compute_steps') cs
+JOIN nodes c ON c.id = json_extract(cs.value, '$.module')
+WHERE b.type = 'behavior'
+AND c.type = 'compute'
+AND json_extract(c.properties, '$.output_type') = 'render'
+AND json_extract(c.properties, '$.render_format') = 'raw';
+
+-- Find json-typed params flowing through behavior compute steps
+SELECT b.id as behavior_id,
+       json_extract(inp.value, '$.name') as param_name,
+       json_extract(inp.value, '$.type') as param_type
+FROM nodes b, json_each(b.properties, '$.input') inp
+WHERE b.type = 'behavior'
+AND json_extract(inp.value, '$.type') = 'json';
+```
+
+Inference rules:
+- Behavior has adapter calls → `ImpurityInfo.is_pure = false`, source: `{ kind: 'adapter_call', ... }`
+- Behavior uses a compute module with `render(raw)` output → `ImpurityInfo.is_pure = false`, source: `{ kind: 'render_raw', ... }`
+- Behavior accepts `json`-typed inputs → source: `{ kind: 'json_type', ... }` (tracked but does not alone make a behavior impure — `json` is a type-system hole, not a side-effect source)
+- Behavior with no adapter calls and no `render(raw)` usage → `ImpurityInfo.is_pure = true`, sources: `[]`
 
 #### Pass 6: Projection Type Checking
 
@@ -554,31 +644,31 @@ Checks:
 
 Errors:
 ```
-ERROR [projection-send-mismatch] projections.graph:28
+ERROR [projection-send-mismatch] projections.gln:28
   Projection 'profile_edit', action 'update_email_btn':
   Sends 'email' to behavior 'update_email',
   but behavior expects input named 'new_email'.
   
-  Behavior 'update_email' inputs (behaviors.graph:5):
+  Behavior 'update_email' inputs (behaviors.gln:5):
     new_email : string
   
   Did you mean: send new_email = field(new_email).value
 
-ERROR [projection-binding-sensitive] projections.graph:12
+ERROR [projection-binding-sensitive] projections.gln:12
   Projection 'profile_edit', data binding 'current_email = current_user.email':
   ✓ Valid — 'email' is not @sensitive.
   
   WARNING: Binding 'current_user.password_hash' would fail here because
   'password_hash' is @sensitive. This is informational only — no action needed.
 
-ERROR [projection-derived-field] projections.graph:45
+ERROR [projection-derived-field] projections.gln:45
   Projection 'storefront', derived 'filtered_products':
   Expression 'products | where(name contains $state.search_term)':
   Entity 'Product' has no field 'name'.
   Available string fields on Product: title, description
   Did you mean 'title'?
 
-ERROR [projection-state-type] projections.graph:38
+ERROR [projection-state-type] projections.gln:38
   Projection 'storefront', on_click handler for 'add_to_cart':
   'append $state.cart_items = { ... }': Object includes field 'price'
   but earlier reference to cart_items uses field 'unit_price'.
@@ -599,11 +689,11 @@ Checks:
 
 Errors:
 ```
-ERROR [policy-constraint-param] policies.graph:5
+ERROR [policy-constraint-param] policies.gln:5
   Policy 'owner_access', rule 'allow read when is_owner(target: $target)':
   Constraint 'is_owner' expects param 'target_entity', not 'target'.
   
-  Constraint signature (constraints.graph:2):
+  Constraint signature (constraints.gln:2):
     params target_entity : entity
   
   Fix: is_owner(target_entity: $target)
@@ -668,15 +758,128 @@ Checks:
 
 Warnings:
 ```
-WARNING [unused-compute] compute.graph:18
+WARNING [unused-compute] compute.gln:18
   Compute module 'generate_confirmation_code' is declared but never referenced
   by any behavior or constraint.
 
-WARNING [unreachable-listener] behaviors.graph:60
+WARNING [unreachable-listener] behaviors.gln:60
   Listener 'send_order_confirmation' listens for event 'order.confirmed',
   but no behavior emits 'order.confirmed'.
   Did you mean 'order.placed'?
   Events emitted in this application: order.placed, user.email_changed, user.password_changed
+```
+
+**Impurity propagation:**
+
+After structural cross-cutting checks, Pass 8 propagates impurity from behaviors (computed in Pass 5) to listeners and projections.
+
+```sql
+-- Find listeners that trigger impure behaviors (transitive impurity)
+SELECT l.id as listener_id,
+       json_extract(l.properties, '$.event') as event,
+       json_extract(l.properties, '$.triggers_behavior') as behavior_id
+FROM nodes l
+WHERE l.type = 'listener'
+AND json_extract(l.properties, '$.triggers_behavior') IN (
+  SELECT id FROM nodes WHERE type = 'behavior'
+  -- behaviors marked impure by Pass 5
+);
+
+-- Find projections with actions that submit to impure behaviors
+SELECT p.id as projection_id,
+       json_extract(action.value, '$.submit_to') as behavior_id
+FROM nodes p, json_each(p.properties, '$.actions') action
+WHERE p.type = 'projection'
+AND json_extract(action.value, '$.submit_to') IN (
+  SELECT id FROM nodes WHERE type = 'behavior'
+  -- behaviors marked impure by Pass 5
+);
+
+-- Find projections that use components (always impure — opaque DOM)
+SELECT p.id as projection_id,
+       json_extract(usage.value, '$.component_id') as component_id
+FROM nodes p, json_each(p.properties, '$.component_usages') usage
+WHERE p.type = 'projection';
+
+-- Find projections with render(raw) directives
+SELECT p.id as projection_id,
+       json_extract(rd.value, '$.compute_module') as module_id
+FROM nodes p, json_each(p.properties, '$.render_directives') rd
+WHERE p.type = 'projection'
+AND json_extract(rd.value, '$.format') = 'raw';
+```
+
+Propagation rules:
+- Listener triggers an impure behavior → listener is impure, source: `{ kind: 'propagated', from_node: behavior_id, chain: [...] }`
+- Projection action submits to an impure behavior → projection is impure, source: `{ kind: 'propagated', from_node: behavior_id, chain: [...] }`
+- Projection uses a component → projection is impure, source: `{ kind: 'component', ... }`
+- Projection uses `render(raw)` → projection is impure, source: `{ kind: 'render_raw', ... }`
+- A projection or listener may have multiple impurity sources (e.g., uses a component AND submits to an impure behavior)
+
+**json usage collection:**
+
+Pass 8 scans the entire graph for `json`-typed fields, parameters, and outputs. Each usage is recorded in `TypeMap.json_usages` and generates a warning.
+
+```sql
+-- Entity fields typed as json
+SELECT n.id as node_id, 'entity' as node_type,
+       json_extract(f.value, '$.name') as field_name
+FROM nodes n, json_each(n.properties, '$.fields') f
+WHERE n.type = 'entity'
+AND json_extract(f.value, '$.type') = 'json';
+
+-- Compute module inputs/outputs typed as json
+SELECT n.id as node_id, 'compute' as node_type,
+       json_extract(p.value, '$.name') as param_name
+FROM nodes n, json_each(n.properties, '$.inputs') p
+WHERE n.type = 'compute'
+AND json_extract(p.value, '$.type') = 'json'
+UNION ALL
+SELECT n.id, 'compute', json_extract(o.value, '$.name')
+FROM nodes n, json_each(n.properties, '$.outputs') o
+WHERE n.type = 'compute'
+AND json_extract(o.value, '$.type') = 'json';
+
+-- Adapter action inputs/outputs typed as json
+SELECT n.id as node_id, 'adapter' as node_type,
+       json_extract(a.value, '$.name') || '.' || json_extract(p.value, '$.name') as param_name
+FROM nodes n, json_each(n.properties, '$.actions') a,
+     json_each(json_extract(a.value, '$.inputs'), '$') p
+WHERE n.type = 'adapter'
+AND json_extract(p.value, '$.type') = 'json';
+
+-- Behavior inputs typed as json
+SELECT n.id as node_id, 'behavior' as node_type,
+       json_extract(inp.value, '$.name') as param_name
+FROM nodes n, json_each(n.properties, '$.input') inp
+WHERE n.type = 'behavior'
+AND json_extract(inp.value, '$.type') = 'json';
+
+-- Component props typed as json
+SELECT n.id as node_id, 'component' as node_type,
+       json_extract(p.value, '$.name') as prop_name
+FROM nodes n, json_each(n.properties, '$.props') p
+WHERE n.type = 'component'
+AND json_extract(p.value, '$.type') = 'json';
+```
+
+Warnings:
+```
+WARNING [json-type-hole] entities.gln:12
+  Entity 'Order', field 'metadata': type is 'json'.
+  The type checker cannot verify field access or shape compatibility
+  on json values.
+
+  If the shape is known, consider:
+    field metadata : record({ source : string, campaign_id : string })
+
+  This enables full type checking on metadata field access
+  throughout behaviors, projections, and compute modules.
+
+WARNING [json-type-hole] adapters.gln:8
+  Adapter 'analytics', action 'track', input 'properties': type is 'json'.
+  Consider record({ event_name: string, user_id: uuid, timestamp: timestamp })
+  if the event shape is predictable.
 ```
 
 #### Pass 9: Component Validation
@@ -719,48 +922,48 @@ Checks:
 
 Errors:
 ```
-ERROR [component-missing-required] projections.graph:45
+ERROR [component-missing-required] projections.gln:45
   Projection 'task_board', component 'drag_drop_list':
   Missing required prop 'items'.
 
-  Component 'drag_drop_list' required props (components.graph:4):
+  Component 'drag_drop_list' required props (components.gln:4):
     items : list(record({ id: uuid, title: string, position: integer })) @required
 
   Add: bind items = <list_binding>
 
-ERROR [component-prop-type] projections.graph:72
+ERROR [component-prop-type] projections.gln:72
   Projection 'admin_dashboard', component 'chart':
   Prop 'type' expects enum(bar, line, pie, area), received string "scatter".
   "scatter" is not a valid enum value.
   Valid values: bar, line, pie, area
 
-ERROR [component-prop-record-mismatch] projections.graph:80
+ERROR [component-prop-record-mismatch] projections.gln:80
   Projection 'admin_dashboard', component 'data_table':
   Prop 'data' expects list(record({ id: uuid })).
   Binding 'all_orders' resolves to list of entity 'Order'.
   ✓ Order has field 'id' of type uuid — record shape is compatible.
 
-ERROR [component-event-type] projections.graph:88
+ERROR [component-event-type] projections.gln:88
   Projection 'admin_dashboard', component 'data_table':
   Event 'on_row_click' has type record({ id: uuid }).
   Handler accesses '$event.order_id', but event record has no field 'order_id'.
   Available fields: id (uuid)
   Did you mean '$event.id'?
 
-ERROR [component-unknown] projections.graph:95
+ERROR [component-unknown] projections.gln:95
   Projection 'admin_dashboard' uses component 'data_grid',
   which is not declared.
   Did you mean 'data_table'?
   Available components: chart, rich_text_editor, data_table, drag_drop_list
 
-ERROR [render-not-render-type] projections.graph:55
+ERROR [render-not-render-type] projections.gln:55
   Projection 'storefront', render directive:
   Compute module 'calculate_discount' does not declare a render output.
   Only compute modules with 'output markup : render(...)' can be used
   in render directives.
   Compute modules with render output: sales_sparkline (svg), markdown_to_html (html_safe)
 
-WARNING [render-raw-unsafe] projections.graph:62
+WARNING [render-raw-unsafe] projections.gln:62
   Projection 'content_page', render directive uses compute module
   'custom_template' with output type render(raw).
   Raw render output is not sanitized — ensure the compute module
@@ -797,13 +1000,13 @@ Checks:
 
 Errors:
 ```
-ERROR [adapter-missing-action] behaviors.graph:42
+ERROR [adapter-missing-action] behaviors.gln:42
   Behavior 'place_order', adapter call 'stripe_payments.charge':
   Adapter 'stripe_payments' has no action 'charge'.
   Available actions: create_charge, create_refund
   Did you mean 'create_charge'?
 
-ERROR [adapter-param-type] behaviors.graph:44
+ERROR [adapter-param-type] behaviors.gln:44
   Behavior 'place_order', adapter call 'stripe_payments.create_charge':
   Param 'amount' expects type 'integer', but received 'decimal'
   from 'total_result.total'.
@@ -811,12 +1014,100 @@ ERROR [adapter-param-type] behaviors.graph:44
   Stripe expects amounts in cents (integer). You may need a compute
   module to convert: dollars_to_cents(amount: total_result.total)
 
-ERROR [adapter-output-field] behaviors.graph:48
+ERROR [adapter-output-field] behaviors.gln:48
   Behavior 'place_order', adapter result 'charge_result.reason':
   Action 'create_charge' has no output 'reason'.
   Available outputs: charge_id (string), status (enum), failure_reason (string)
   Did you mean 'failure_reason'?
 ```
+
+#### Impurity Audit (Post-Pass Summary)
+
+After all 10 passes complete, the type checker produces an impurity audit. The audit generates no errors or warnings — it's a structured summary of where the type system's guarantees weaken. It prints on every build, passing or failing.
+
+**Console output format:**
+```
+─── Impurity Audit ───────────────────────────────────────
+
+Behaviors:     5 total │ 3 pure │ 2 impure
+  ✗ place_order_with_payment  adapter_call (stripe_payments.create_charge)
+  ✗ send_confirmation         adapter_call (email_sender.send)
+
+Projections:   4 total │ 2 pure │ 2 impure
+  ✗ admin_dashboard      component (chart, data_table)
+  ✗ storefront           propagated (place_order_with_payment → stripe_payments.create_charge)
+
+Listeners:     1 total │ 0 pure │ 1 impure
+  ✗ send_order_confirmation  propagated → send_confirmation → email_sender.send
+
+Components:    4 total (all opaque by definition)
+  chart, data_table, drag_drop_list, rich_text_editor
+
+json holes:    1
+  analytics.track.properties  → consider record({ event_name: string, user_id: uuid })
+
+Render safety: 3 directives │ 2 sanitized │ 1 raw
+  ✗ custom_template (raw) in content_page
+
+Pure coverage: 50% (3/5 behaviors, 2/4 projections, 0/1 listeners)
+
+──────────────────────────────────────────────────────────
+```
+
+**JSON interface** (for programmatic consumption):
+
+```typescript
+interface ImpurityAudit {
+  behaviors: {
+    total: number;
+    pure: number;
+    impure: number;
+    details: Array<{
+      id: string;
+      is_pure: boolean;
+      sources: ImpuritySource[];
+    }>;
+  };
+  projections: {
+    total: number;
+    pure: number;
+    impure: number;
+    details: Array<{
+      id: string;
+      is_pure: boolean;
+      sources: ImpuritySource[];
+    }>;
+  };
+  listeners: {
+    total: number;
+    pure: number;
+    impure: number;
+    details: Array<{
+      id: string;
+      is_pure: boolean;
+      sources: ImpuritySource[];
+    }>;
+  };
+  components: {
+    total: number;
+    ids: string[];
+  };
+  json_usages: JsonUsage[];
+  render_safety: {
+    total: number;
+    sanitized: number;
+    raw: number;
+    raw_details: Array<{ compute_module: string; projection: string }>;
+  };
+  pure_coverage: {
+    percentage: number;  // (pure behaviors + projections + listeners) / total
+    pure: number;
+    total: number;
+  };
+}
+```
+
+The audit is included in the JSON output of `graphlang check --format json` alongside errors and warnings (see `TypeCheckResult` below).
 
 ### 3.4 Error Output Format
 
@@ -860,11 +1151,11 @@ interface TypeCheckError {
 ```
 ✗ Build failed: 3 errors, 2 warnings
 
-ERROR [behavior-compute-param-mismatch] behaviors.graph:18
+ERROR [behavior-compute-param-mismatch] behaviors.gln:18
 │ Behavior 'update_password', compute step 'verify_result':
 │ Param name mismatch calling 'verify_password'.
 │
-│   Expected: plaintext (from compute.graph:8)
+│   Expected: plaintext (from compute.gln:8)
 │   Received: plain_text
 │
 │ Path: behavior:update_password → compute:verify_password → input:plaintext
@@ -872,21 +1163,39 @@ ERROR [behavior-compute-param-mismatch] behaviors.graph:18
 │ Suggestion: Change 'plain_text' to 'plaintext'
 │
 │ Related:
-│   compute.graph:8  — verify_password input declaration
-│   behaviors.graph:6 — behavior input that provides the value
+│   compute.gln:8  — verify_password input declaration
+│   behaviors.gln:6 — behavior input that provides the value
 
-ERROR [projection-send-name] projections.graph:28
+ERROR [projection-send-name] projections.gln:28
 │ ...
 
-ERROR [constraint-invalid-traversal] constraints.graph:8
+ERROR [constraint-invalid-traversal] constraints.gln:8
 │ ...
 
-WARNING [unused-compute] compute.graph:18
+WARNING [unused-compute] compute.gln:18
 │ ...
 
 WARNING [policy-uncovered-entity] (global)
 │ ...
 ```
+
+The impurity audit prints after errors and warnings on every build — both passing and failing. On a clean build:
+
+```
+✓ Build passed: 0 errors, 1 warning
+
+WARNING [json-type-hole] adapters.gln:8
+│ ...
+
+─── Impurity Audit ───────────────────────────────────────
+...
+```
+
+**Additional warning codes** for impurity tracking:
+- `json-type-hole` (warning) — a field, parameter, or output uses the `json` type, bypassing structural type checking
+- `adapter-output-unverified` (info) — an adapter action's declared output types cannot be verified at build time; runtime validation will check them
+
+Note: `render-raw-unsafe` already exists (see Pass 9).
 
 **JSON output** (for programmatic consumption by AI tools):
 
@@ -894,7 +1203,16 @@ WARNING [policy-uncovered-entity] (global)
 graphlang check ./app/ --format json
 ```
 
-Returns the array of TypeCheckError objects — AI can parse this directly and make targeted fixes.
+Returns a `TypeCheckResult` object wrapping both errors and the impurity audit:
+
+```typescript
+interface TypeCheckResult {
+  errors: TypeCheckError[];     // all errors, warnings, and info messages
+  audit: ImpurityAudit;         // impurity summary (see above)
+}
+```
+
+AI can parse this directly — errors for targeted fixes, the audit for understanding purity coverage.
 
 ### 3.5 Type Checking as a Standalone Step
 
@@ -908,11 +1226,11 @@ graphlang check ./app/
 graphlang check ./app/ --format json
 
 # Type-check a single file (faster iteration)
-graphlang check ./app/behaviors.graph
+graphlang check ./app/behaviors.gln
 ```
 
 This means the AI development loop is:
-1. AI generates/modifies `.graph` files
+1. AI generates/modifies `.gln` files
 2. Run `graphlang check`
 3. AI reads errors, makes fixes
 4. Repeat until clean
@@ -922,7 +1240,7 @@ Steps 1-4 are fast (no compilation, no runtime startup). The type checker is the
 
 ---
 
-## 4. The DSL (.graph files)
+## 4. The DSL (.gln files)
 
 ### 4.1 Design Principles
 
@@ -1718,7 +2036,7 @@ The transition modifier tells the compiler to animate between branches. The outg
 
 - When matching on an enum field, the type checker verifies every enum value is covered, or that an `else` branch exists. Missing values produce a warning:
   ```
-  WARNING [match-incomplete] projections.graph:25
+  WARNING [match-incomplete] projections.gln:25
     match on 'order.status': missing enum value "confirmed".
     Values for Order.status: pending, confirmed, shipped, delivered, cancelled
     Add a branch or add 'else ... end'
@@ -2293,6 +2611,8 @@ Compute modules must be **pure functions** — no side effects, no external stat
 
 Violations are build errors, not warnings.
 
+**Compute modules and impurity:** Because compute modules are lint-enforced pure functions (no I/O, no side effects, no non-determinism), they never contribute to impurity in the type checker's impurity tracking. The four impurity sources — adapter calls, components, `render(raw)`, and `json` type — are all outside the compute layer. A behavior's compute steps don't affect its `ImpurityInfo`; only its adapter calls and `render(raw)` usage do. This is by design: the compute layer is the provably pure core of every GraphLang application.
+
 ### 5.3 Example Compute Modules
 
 #### compute/hash_password.ts
@@ -2397,7 +2717,7 @@ No loader, no runtime, no marshaling. Functions are imported and called directly
 
 The graph declares compute module signatures. The TypeScript files implement them. Both are validated:
 
-**Graph declaration (compute.graph):**
+**Graph declaration (compute.gln):**
 ```
 compute validate_password_strength
   description "Check password strength requirements"
@@ -2618,7 +2938,7 @@ Runs all 10 type checker passes against the provided database and returns all er
 ### 7.1 Schema
 
 ```sql
--- Graph structure (populated at build time from .graph files)
+-- Graph structure (populated at build time from .gln files)
 CREATE TABLE nodes (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
@@ -2766,6 +3086,13 @@ async function executeBehavior(
     const params = resolveParams(step.params, ctx);
     const computeModule = await import(`./compute/${step.module}`);
     ctx.computed[step.alias] = computeModule[step.function](...Object.values(params));
+
+    // 4a. Validate compute output against declared types
+    validateAgainstDeclaredTypes(
+      ctx.computed[step.alias],
+      graph.getNode(step.module).properties.outputs,
+      `compute:${step.module}`
+    );
   }
 
   // 5. Require assertions
@@ -2785,6 +3112,13 @@ async function executeBehavior(
     } catch (err) {
       return { success: false, error: `Adapter call failed: ${call.adapter_id}.${call.action}` };
     }
+
+    // 6a. Validate adapter response against declared output types
+    validateAgainstDeclaredTypes(
+      ctx.adapter_results[call.alias],
+      action.outputs,
+      `adapter:${call.adapter_id}.${call.action}`
+    );
   }
 
   // 7. Require assertions on adapter results
@@ -2811,7 +3145,30 @@ async function executeBehavior(
     navigate: behavior.properties.on_success?.navigate,
   };
 }
+
+// DeclaredOutput: { name: string; type: ResolvedType; nullable: boolean }
+// (from the compute/adapter node's declared output list in the graph)
+//
+// Runtime type validation — checks actual values against declared types.
+// Prototype behavior: warn on mismatch (log, don't fail). Production could
+// optionally fail hard via a strictness flag.
+function validateAgainstDeclaredTypes(
+  actual: any, declaredOutputs: DeclaredOutput[], source: string
+): void {
+  for (const output of declaredOutputs) {
+    const value = actual[output.name];
+    if (value === undefined && !output.nullable) {
+      console.warn(`[runtime-type-mismatch] ${source}: expected output '${output.name}' but got undefined`);
+      continue;
+    }
+    if (value !== undefined && typeof value !== expectedJsType(output.type)) {
+      console.warn(`[runtime-type-mismatch] ${source}: output '${output.name}' expected ${output.type}, got ${typeof value}`);
+    }
+  }
+}
 ```
+
+Runtime validation is especially important for adapter calls, where the response comes from an external service and the declared output types are promises, not proofs. Compute modules are pure functions with TypeScript-checked signatures, so runtime mismatches should never occur there — the validation is a defense-in-depth measure.
 
 ---
 
@@ -2839,7 +3196,7 @@ graphlang seed ./app/ --data ./seed.json
 
 ### 10.2 Build Steps
 
-1. **Parse** all `.graph` files → in-memory AST
+1. **Parse** all `.gln` files → in-memory AST
 2. **Write to SQLite** → nodes and edges tables
 3. **Type Check** → query SQLite, validate all contracts, report errors
 4. **If errors → STOP.** Output all errors. Do not proceed.
@@ -2890,7 +3247,7 @@ The prototype tests the core thesis:
 
 ### Phase 1: Parser + SQLite + Type Checker (Weeks 1-2)
 
-**Goal:** Parse `.graph` files into SQLite. Type-check everything. Produce excellent errors.
+**Goal:** Parse `.gln` files into SQLite. Type-check everything. Produce excellent errors.
 
 This is the most important phase. The type checker is the product.
 
@@ -2913,7 +3270,7 @@ This is the most important phase. The type checker is the product.
 7. Error output formatting (console + JSON)
 8. CLI: `graphlang check`
 
-**Test:** Write intentionally broken `.graph` files. Verify the type checker catches every error with specific, actionable messages. Feed the errors to Claude and verify it can fix them.
+**Test:** Write intentionally broken `.gln` files. Verify the type checker catches every error with specific, actionable messages. Feed the errors to Claude and verify it can fix them.
 
 ### Phase 2: Compute Modules + CSS Pipeline (Week 3)
 
@@ -2966,7 +3323,7 @@ This is the most important phase. The type checker is the product.
 
 **Goal:** Prove the thesis.
 
-1. Create Claude prompt for generating `.graph` + TypeScript compute modules
+1. Create Claude prompt for generating `.gln` + TypeScript compute modules
 2. Measure: "Add a name change feature to profile_edit"
    - AI generates graph modifications
    - Run `graphlang check`
@@ -3043,14 +3400,14 @@ graphlang/
 │       └── bundler.ts              # Concatenate + minify CSS source files
 ├── examples/
 │   └── ecommerce/
-│       ├── entities.graph
-│       ├── behaviors.graph
-│       ├── projections.graph
-│       ├── policies.graph
-│       ├── constraints.graph
-│       ├── compute.graph
-│       ├── adapters.graph          # Typed adapter declarations
-│       ├── components.graph        # Component declarations
+│       ├── entities.gln
+│       ├── behaviors.gln
+│       ├── projections.gln
+│       ├── policies.gln
+│       ├── constraints.gln
+│       ├── compute.gln
+│       ├── adapters.gln          # Typed adapter declarations
+│       ├── components.gln        # Component declarations
 │       ├── styles/                 # CSS source files
 │       │   ├── theme.css            # Design tokens, base styles
 │       │   ├── layout.css           # Page, grid, card styles
@@ -3145,8 +3502,13 @@ graphlang/
 16. Adapter calls in behaviors execute with typed contracts and proper error handling
 17. Render compute modules inject format-typed, sanitized markup into projections
 
+### Impurity Tracking
+18. Impurity audit identifies all impurity sources with zero false negatives — every adapter call, component usage, `render(raw)` directive, and `json` type hole is reported
+19. Impurity propagation correctly marks transitive impurity through listener→behavior and projection→behavior chains
+20. Runtime validates adapter and compute outputs against declared types (warn on mismatch in prototype)
+
 ### Thesis Validation (Ultimate)
-18. AI-modified graphs with type checking have a measurably lower error rate than AI-modified React code for equivalent changes
+21. AI-modified graphs with type checking have a measurably lower error rate than AI-modified React code for equivalent changes
 
 ---
 
@@ -3167,12 +3529,14 @@ graphlang/
 13. **Match branch DOM cleanup.** Outgoing match branches may contain components that need unmounting and event listeners that need removal. Answered by #7 — unmount fires on branch exit. The compiler generates cleanup code per branch.
 14. **Server-side match rendering.** When match depends on server data and a behavior changes that data, how does the client update? Prototype: behavior response includes a redirect, page reloads with the correct branch rendered server-side.
 15. **Compute contract verification.** Build step verifies TypeScript function signatures match graph declarations by parsing the TS AST. How strict? Prototype: exact param name and type match.
+16. **`--strict-purity` flag.** Should there be a CLI flag that promotes `json-type-hole` and `render-raw-unsafe` warnings to errors? Useful for teams that want to enforce purity standards in CI. Prototype: warnings only. Production: opt-in flag.
+17. **Runtime adapter validation strictness.** The prototype logs a warning when an adapter response doesn't match declared output types. Should there be a mode that fails the behavior instead? Trade-off: strictness vs. resilience when external services change their response shape without notice.
 
 ---
 
 ## 16. Future Directions
 
-- **Test DSL** — declare behavior tests directly in `.graph` files with typed fixtures; the type checker validates fixture shapes, the test runner executes them; AI generates tests in the same language as the application
+- **Test DSL** — declare behavior tests directly in `.gln` files with typed fixtures; the type checker validates fixture shapes, the test runner executes them; AI generates tests in the same language as the application
 - **Visual graph editor** — drag-and-drop with live type checking
 - **AI copilot** — natural language → graph modifications with type checker in the loop
 - **Graph diffing** — semantic diffs: "added entity Review with 4 fields"
@@ -3180,7 +3544,7 @@ graphlang/
 - **Ahead-of-time compilation** — projections → optimized React/Svelte
 - **Multi-tenant** — graph-level isolation
 - **Compute in other languages** — optional Wasm target for performance-critical compute modules (Rust, Go)
-- **Import from existing codebases** — analyze and generate equivalent `.graph`
+- **Import from existing codebases** — analyze and generate equivalent `.gln`
 - **Component registry** — community-published components with typed contracts (npm-like ecosystem for GraphLang UI primitives)
 - **Adapter library** — pre-built typed adapter definitions for common services (Stripe, Twilio, SendGrid, AWS S3, Google Maps, etc.)
 - **Adapter codegen** — generate typed adapter declarations from OpenAPI/Swagger specs automatically
@@ -3189,3 +3553,6 @@ graphlang/
 - **Record type inference** — when a behavior creates an object literal, infer the record type and validate downstream usage without requiring explicit type annotation
 - **Generic record types** — parameterized record types for components that work with any data shape: `component data_table<T extends record({ id: uuid })>` where T is the row type
 - **Entity-to-record coercion** — automatic structural compatibility checking when passing entity data where a record type is expected, eliminating manual mapping
+- **Impurity budget** — CI-enforced threshold for pure coverage percentage (e.g., "pure coverage must be ≥ 70%"); fail the build if impurity grows beyond the budget
+- **Adapter mock contracts** — generate typed mock implementations from adapter declarations for testing; behaviors that call adapters can be tested without real external services by using mocks that satisfy the declared output types
+- **json elimination tooling** — AI-assisted migration from `json`-typed fields to `record({...})` types; analyze runtime data to infer record shapes, suggest replacements, and validate that all downstream usages would remain compatible
