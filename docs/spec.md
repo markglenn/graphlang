@@ -1382,10 +1382,12 @@ Steps 1-4 are fast (no compilation, no runtime startup). The type checker is the
 ### 4.1 Design Principles
 
 - **Flat structure.** Every node and edge is a top-level declaration. No nesting hierarchies.
+- **One declaration per file.** Each `.gln` file contains exactly one top-level declaration (one entity, one behavior, one projection, etc.). Filename is the snake_case form of the node name (e.g., `order.gln`, `place_order.gln`, `order_status.gln`). This keeps git diffs surgical — a single-field rename touches one file — and maximizes watch mode efficiency, since the dependency map is file → nodes → passes. No imports, no module system, no file-linking mechanism. The tooling recursively scans all `.gln` files in the project tree.
+- **Directory-structure-agnostic.** `graphlang check` processes every `.gln` file it finds regardless of directory layout. The node type is declared in the file content (`entity Order`, `behavior place_order`) — directory names add no information the tooling needs. Teams can organize by node type, by feature, or not at all. The spec does not prescribe a convention because the primary author is AI, which loads entire project context and doesn't navigate directories.
 - **One statement per line.** Trivial for AI to emit, trivial to diff in git.
 - **Explicit edges.** Every relationship is declared, never implicit.
 - **Typed everything.** Node types, field types, edge types — all explicit.
-- **Order-independent.** Declarations can appear in any order. The parser resolves references.
+- **Order-independent.** Declarations can appear in any order across any files. The parser resolves references after all files are loaded.
 - **No computation in the graph.** Computation lives in TypeScript modules, referenced by name.
 
 ### 4.2 Syntax Reference
@@ -1600,14 +1602,14 @@ Declare compute modules with typed signatures. Implementation lives in `.ts` fil
 ```
 compute hash_password
   description "Hash a plaintext password"
-  source "compute/hash_password.ts"
+  source "impl/compute/hash_password.ts"
   input plaintext : string
   output hashed : string
 end
 
 compute verify_password
   description "Verify plaintext against hash"
-  source "compute/verify_password.ts"
+  source "impl/compute/verify_password.ts"
   input plaintext : string
   input hash : string
   output valid : boolean
@@ -1615,7 +1617,7 @@ end
 
 compute calculate_order_total
   description "Sum line items"
-  source "compute/calculate_order_total.ts"
+  source "impl/compute/calculate_order_total.ts"
   input items : list(record({
     unit_price : decimal,
     quantity : integer
@@ -1625,7 +1627,7 @@ end
 
 compute calculate_discount
   description "Apply loyalty tier discount"
-  source "compute/calculate_discount.ts"
+  source "impl/compute/calculate_discount.ts"
   input subtotal : decimal
   input tier : string
   output final_total : decimal
@@ -1634,7 +1636,7 @@ end
 
 compute validate_password_strength
   description "Check password strength requirements"
-  source "compute/validate_password_strength.ts"
+  source "impl/compute/validate_password_strength.ts"
   input password : string
   output valid : boolean
   output reason : string
@@ -1642,7 +1644,7 @@ end
 
 compute format_currency
   description "Format decimal as currency string"
-  source "compute/format_currency.ts"
+  source "impl/compute/format_currency.ts"
   input amount : decimal
   input currency : string
   output formatted : string
@@ -2478,7 +2480,7 @@ A component is a reusable UI element with typed props flowing in and typed event
 ```
 component drag_drop_list
   description "Reorderable list with drag and drop"
-  source "components/drag_drop_list.ts"
+  source "impl/components/drag_drop_list.ts"
 
   prop items : list(record({
     id : uuid,
@@ -2496,7 +2498,7 @@ end
 
 component chart
   description "Data visualization chart"
-  source "components/chart.ts"
+  source "impl/components/chart.ts"
 
   prop data : list(record({
     label : string,
@@ -2510,7 +2512,7 @@ end
 
 component rich_text_editor
   description "WYSIWYG rich text editor"
-  source "components/rich_text_editor.ts"
+  source "impl/components/rich_text_editor.ts"
 
   prop content : text
   prop placeholder : string
@@ -2523,7 +2525,7 @@ end
 
 component data_table
   description "Sortable, filterable data table"
-  source "components/data_table.ts"
+  source "impl/components/data_table.ts"
 
   prop data : list(record({
     id : uuid
@@ -2655,7 +2657,7 @@ A compute module can declare a `render(<format>)` output type, meaning it return
 ```
 compute sales_sparkline
   description "Generate an inline SVG sparkline from sales data"
-  source "compute/sales_sparkline.ts"
+  source "impl/compute/sales_sparkline.ts"
   input data : list(record({ month : string, total : decimal }))
   input width : integer
   input height : integer
@@ -2664,14 +2666,14 @@ end
 
 compute markdown_to_html
   description "Convert markdown text to safe HTML"
-  source "compute/markdown_to_html.ts"
+  source "impl/compute/markdown_to_html.ts"
   input source : text
   output markup : render(html_safe)
 end
 
 compute syntax_highlight
   description "Syntax-highlight a code block"
-  source "compute/syntax_highlight.ts"
+  source "impl/compute/syntax_highlight.ts"
   input code : text
   input language : string
   output markup : render(html_safe)
@@ -3076,7 +3078,7 @@ The graph declares compute module signatures. The TypeScript files implement the
 ```
 compute validate_password_strength
   description "Check password strength requirements"
-  source "compute/validate_password_strength.ts"
+  source "impl/compute/validate_password_strength.ts"
   input password : string
   output valid : boolean
   output reason : string
@@ -3183,7 +3185,7 @@ Compute modules are pure functions. Their tests require no setup:
 ```typescript
 // tests/compute/calculate_order_total.test.ts
 import { describe, it, expect } from 'vitest';
-import { calculate_order_total } from '../../examples/ecommerce/compute/calculate_order_total';
+import { calculate_order_total } from '../../examples/ecommerce/impl/compute/calculate_order_total';
 
 describe('calculate_order_total', () => {
   it('sums line items', () => {
@@ -3856,33 +3858,60 @@ graphlang/
 │       └── bundler.ts              # Concatenate + minify CSS source files
 ├── examples/
 │   └── ecommerce/
-│       ├── entities.gln
-│       ├── behaviors.gln
-│       ├── projections.gln
-│       ├── policies.gln
-│       ├── constraints.gln
-│       ├── compute.gln
-│       ├── adapters.gln          # Typed adapter declarations
-│       ├── components.gln        # Component declarations
+│       │                           # One declaration per .gln file.
+│       │                           # Subdirectory layout is optional —
+│       │                           # the tooling scans all .gln files
+│       │                           # regardless of directory structure.
+│       ├── entities/               # Entity & enum declarations
+│       │   ├── user.gln
+│       │   ├── product.gln
+│       │   ├── order.gln
+│       │   ├── order_item.gln
+│       │   ├── order_status.gln       # Tagged enum
+│       │   └── payment_result.gln     # Tagged enum
+│       ├── behaviors/              # Behavior declarations
+│       │   ├── update_email.gln
+│       │   ├── update_password.gln
+│       │   └── place_order.gln
+│       ├── projections/            # Projection declarations
+│       │   ├── profile_edit.gln
+│       │   ├── storefront.gln
+│       │   └── admin_dashboard.gln
+│       ├── policies/               # Policy declarations
+│       │   ├── owner_access.gln
+│       │   └── public_read_products.gln
+│       ├── constraints/            # Constraint declarations
+│       │   ├── is_owner.gln
+│       │   └── email_is_valid.gln
+│       ├── compute/                # Compute module declarations
+│       │   ├── hash_password.gln
+│       │   └── calculate_order_total.gln
+│       ├── adapters/               # Adapter declarations
+│       │   ├── stripe_payments.gln
+│       │   └── email_sender.gln
+│       ├── components/             # Component declarations
+│       │   ├── chart.gln
+│       │   └── drag_drop_list.gln
 │       ├── styles/                 # CSS source files
 │       │   ├── theme.css            # Design tokens, base styles
 │       │   ├── layout.css           # Page, grid, card styles
 │       │   ├── forms.css            # Field, action, form styles
 │       │   └── transitions.css      # Enter/exit/match animations
-│       ├── compute/                # TypeScript compute modules
-│       │   ├── hash_password.ts
-│       │   ├── verify_password.ts
-│       │   ├── calculate_order_total.ts
-│       │   ├── calculate_discount.ts
-│       │   ├── validate_password_strength.ts
-│       │   ├── format_currency.ts
-│       │   ├── sales_sparkline.ts    # Render compute (returns SVG markup)
-│       │   └── markdown_to_html.ts   # Render compute (returns HTML)
-│       ├── components/             # Component JS implementations
-│       │   ├── chart.js
-│       │   ├── drag_drop_list.js
-│       │   ├── rich_text_editor.js
-│       │   └── data_table.js
+│       ├── impl/                    # Implementation files (not .gln)
+│       │   ├── compute/              # TypeScript compute modules
+│       │   │   ├── hash_password.ts
+│       │   │   ├── verify_password.ts
+│       │   │   ├── calculate_order_total.ts
+│       │   │   ├── calculate_discount.ts
+│       │   │   ├── validate_password_strength.ts
+│       │   │   ├── format_currency.ts
+│       │   │   ├── sales_sparkline.ts    # Render compute (returns SVG markup)
+│       │   │   └── markdown_to_html.ts   # Render compute (returns HTML)
+│       │   └── components/           # Component JS implementations
+│       │       ├── chart.js
+│       │       ├── drag_drop_list.js
+│       │       ├── rich_text_editor.js
+│       │       └── data_table.js
 └── tests/
     ├── typechecker/
     │   ├── pass-entity.test.ts

@@ -70,10 +70,10 @@ src/
   css/              — postcss-lint.ts, bundler.ts
 
 examples/ecommerce/ — the reference application
-  *.gln           — graph definitions
-  compute/*.ts      — compute module implementations
-  components/*.js   — component JS implementations (mount/update/unmount)
-  styles/*.css      — CSS source files
+  **/*.gln            — graph definitions (one declaration per file, any directory layout)
+  impl/compute/*.ts   — compute module implementations
+  impl/components/*.js — component JS implementations (mount/update/unmount)
+  styles/*.css        — CSS source files
 
 tests/
   helpers.ts        — createTestGraph(), createTestEnvironment(), runTypeChecker()
