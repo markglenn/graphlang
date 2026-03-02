@@ -6,7 +6,7 @@
 
 **Author:** Mark Glenn
 
-**Purpose:** Build a working prototype of an AI-native application framework. The core thesis: applications defined as typed graphs are more reliably authored and modified by AI than traditional codebases. The key differentiator is a comprehensive type system that catches errors at build time and produces error feedback specific enough for AI to self-correct. The framework handles extensibility — custom UI components, third-party integrations, complex rendering — through typed boundaries: the graph owns the wiring, opaque implementations live behind typed contracts, and the type checker validates every connection point.
+**Purpose:** Build a working prototype of an AI-native application framework. The core thesis: applications defined as typed graphs are more reliably authored and modified by AI than traditional codebases. The key differentiator is a graph that externalizes application architecture — every relationship, dependency, and data flow — into an explicit, queryable structure. A comprehensive type system enforces correctness across the graph's edges, catching errors at build time with feedback specific enough for AI to self-correct. The framework handles extensibility — custom UI components, third-party integrations, complex rendering — through typed boundaries: the graph owns the wiring, opaque implementations live behind typed contracts, and the type checker validates every connection point.
 
 ---
 
@@ -22,17 +22,58 @@ GraphLang splits application development into two layers:
 
 The graph is NOT Turing complete on its own, and that's by design. Forcing arbitrary computation into graph form (dataflow nodes for basic arithmetic) defeats the purpose. The graph excels at structure and flow. Pure functions excel at computation. Each does what it's best at.
 
-### The Type System Is the Innovation
+### The Graph Is the Innovation
 
-The graph isn't the real innovation — the **type system** is. The graph is the structure that makes comprehensive type checking possible.
+The graph is the real innovation. By externalizing application architecture into explicit, typed edges, the graph makes every relationship visible, queryable, and checkable. The type system is the powerful consequence — it's what the graph's explicitness _enables_.
 
-In a traditional codebase, type safety is fragmented. TypeScript checks types within files but can't verify that a form submission sends the right shape to an API endpoint that validates it correctly against a database schema. Those connections cross file boundaries, cross language boundaries (frontend JS → HTTP → backend JS → SQL), and are invisible to any single tool.
+In a traditional codebase, architecture is implicit. A form submission connects to an API endpoint that validates against a database schema, but those connections cross file boundaries, cross language boundaries (frontend JS → HTTP → backend JS → SQL), and are invisible to any single tool. No type checker can verify them because no tool can even _see_ them.
 
 In a GraphLang graph, **every connection is a typed edge**. Every edge has types on both ends. The entire application — from UI field to behavior input to constraint parameter to entity mutation to compute module call — is one unified type-checked structure. A renamed field, a mismatched parameter, a wrong type on a binding — all caught at build time, all reported with specific, actionable errors.
 
-This is what makes the graph AI-friendly. Not the syntax. Not the declarative style. The fact that the AI gets immediate, precise feedback when something doesn't fit.
+This is what makes the graph AI-friendly. Not the syntax. Not the declarative style. The fact that architecture is explicit and enumerable — the AI can query what depends on what — and the type system gives immediate, precise feedback when something doesn't fit.
 
-**The AI emits graph definitions + small pure functions. The type checker tells it exactly what's wrong. The compiler/runtime produces the application.**
+**The AI emits graph definitions + small pure functions. It queries the graph to understand context. The type checker tells it exactly what's wrong. The compiler/runtime produces the application.**
+
+### The Graph as Architecture
+
+Traditional codebases have implicit architecture scattered across files, languages, and conventions. A React app's architecture lives in import graphs, route definitions, state management wiring, API call sites, database queries, and component hierarchies — none of which are queryable as a unified structure. Understanding "what happens when a user clicks Submit on the order form" requires reading across dozens of files in multiple languages.
+
+GraphLang centralizes this. Every node type captures one architectural concept:
+
+- **entity** — data schemas
+- **edge** — relationships between entities
+- **behavior** — business logic sequences (event → preconditions → compute → adapters → mutate → effects)
+- **projection** — UI structure, data bindings, state, layout
+- **compute** — typed signatures for pure functions
+- **constraint** — reusable conditions
+- **policy** — access control rules
+- **component** — custom UI with typed contracts
+- **adapter** — external service contracts
+- **listener** — event-triggered behaviors
+
+The graph is stored in SQLite, which means every architectural question is a SQL query. "Which behaviors mutate User?" is a join on the edges table. "What's the full path from the checkout UI to the Stripe adapter?" is a recursive CTE. "What breaks if I rename Order.status?" is a dependency traversal.
+
+This is what makes AI modification reliable. In a traditional codebase, the AI has to _infer_ architecture by reading source files — a lossy, error-prone process. In GraphLang, dependencies are enumerable, blast radius is knowable, and the AI can query the graph before making changes to understand exactly what it's affecting.
+
+### The AI Interaction Model
+
+AI interacts with a GraphLang project through a three-part cycle: **Write**, **Query**, and **Validate**.
+
+**Write.** The AI generates `.gln` files (graph declarations) and TypeScript implementations in `impl/`. The graph defines structure and flow; the TypeScript defines computation. `graphlang sync` keeps the boundary between them aligned — generating type contracts, creating stubs, and rewriting signatures when the graph changes.
+
+**Query.** The AI uses CLI commands to understand the graph before modifying it:
+- `graphlang show <node>` — full node with edges and resolved types
+- `graphlang deps <node>` — what this node depends on
+- `graphlang impact <node>` — what depends on this node (blast radius)
+- `graphlang trace <projection> <entity>` — full path from UI to data
+
+These commands read from SQLite and return structured output. The AI doesn't need to parse source files to understand architecture — it queries the graph directly.
+
+**Validate.** Two checkers run in tandem:
+1. `graphlang check` — validates the graph: type contracts across edges, entity integrity, behavior sequencing, projection bindings, policy coverage. Graph errors mean fixing `.gln` files.
+2. `tsc --noEmit` — validates implementations: function bodies match generated type contracts in `.graphlang/gen/contracts.gen.ts`. TypeScript errors mean fixing `.ts` files.
+
+The division is clean: the graph checker owns structural correctness; `tsc` owns implementation correctness. No custom contract checking is needed — the generated types in `contracts.gen.ts` are the contract, and TypeScript's own compiler enforces them.
 
 ### Typed Boundaries, Not Closed Vocabularies
 
@@ -79,18 +120,22 @@ The feedback loop target: **under 1 second after every save**, with a ceiling of
 
 ### What This Prototype Should Prove
 
-1. The type system catches cross-boundary errors that traditional tooling misses
-2. Error feedback is specific enough that AI can self-correct in 1-2 iterations
-3. AI-modified graphs are more reliably correct than AI-modified React code
-4. An application's architecture can be fully defined as a typed graph
-5. Compute modules run identically on server and client (same TypeScript, same runtime)
-6. A compiler can generate client-side JavaScript from projection nodes
-7. Changes to the graph are surgical — modify one node, rebuild, the app updates
-8. The type check + test feedback loop completes in under 3 seconds on the prototype application
+1. The graph externalizes application architecture in a form AI can query — every dependency, every data flow, every connection is a SQL query away
+2. CLI query commands (`show`, `deps`, `impact`, `trace`) give AI a structured read interface to the full architecture without parsing source files
+3. The type system catches cross-boundary errors that traditional tooling misses
+4. Error feedback is specific enough that AI can self-correct in 1-2 iterations
+5. AI-modified graphs are more reliably correct than AI-modified React code
+6. An application's architecture can be fully defined as a typed graph, and the full architecture is navigable through graph queries
+7. Compute modules run identically on server and client (same TypeScript, same runtime)
+8. A compiler can generate client-side JavaScript from projection nodes
+9. Changes to the graph are surgical — modify one node, rebuild, the app updates
+10. The type check + test feedback loop completes in under 3 seconds on the prototype application
 
 ---
 
 ## 2. Architecture Overview
+
+The graph is the hub. Every tool in the pipeline — the parser, type checker, code generator, compiler, runtime, and CLI query commands — reads from the same SQLite graph store. Source `.gln` files are parsed into the graph; the graph is what gets checked, queried, and compiled. The type checker doesn't operate on source files — it operates on the graph. The CLI query commands don't parse code — they query the graph. This is the architectural payoff of externalizing structure: one representation, many readers.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -206,7 +251,7 @@ Additional benefits:
 
 ## 3. The Type System
 
-**This section is the most important in the spec. The type system is what makes GraphLang useful for AI. Build this first.**
+**The type checker operates on the graph, not on source files.** Build the graph store first (Section 7), then the type checker. The graph must be populated in SQLite before any type checking pass can run — every pass is a SQL query over nodes and edges. The type system is what makes the graph useful for AI: it turns the graph's explicit structure into enforceable contracts with precise error feedback.
 
 ### 3.1 Type System Philosophy
 
@@ -413,6 +458,8 @@ Subtyping applies everywhere record types are used: component props, adapter act
 ### 3.3 Type Checking Passes
 
 The type checker runs as a series of SQL-backed passes over the graph. Each pass queries specific node/edge patterns and validates type contracts.
+
+Each pass is fundamentally a graph traversal. The type checker follows edges from source nodes to target nodes and checks that the types at both endpoints are compatible. Pass 2 follows entity→entity edges and checks cardinality. Pass 5 follows behavior→compute and behavior→entity edges and checks that inputs, outputs, and mutations align. Pass 6 follows projection→behavior edges and checks that form submissions match behavior inputs. The SQL queries _are_ the traversals — joins on the edges table with type checks on the endpoint nodes' properties.
 
 #### Pass 1: Entity & Enum Integrity
 
@@ -1465,17 +1512,23 @@ graphlang check ./app/ --format json
 graphlang check ./app/behaviors.gln
 ```
 
-This means the AI development loop is:
+This means the AI development loop follows the **Write / Query / Validate** model:
 
-1. AI generates/modifies `.gln` files
-2. Run `graphlang sync` → generates contracts, creates/rewrites implementation stubs
-3. AI fills in implementation bodies (referencing `.graphlang/gen/contracts.gen.ts`)
-4. Run `graphlang check` → read-only validation (type check + contract check)
-5. AI reads errors, makes fixes
-6. Repeat until clean
-7. Run `graphlang build` to compile and serve
+**Write.** AI generates or modifies `.gln` files and TypeScript implementations in `impl/`. After graph changes, run `graphlang sync` to generate type contracts, create implementation stubs, and rewrite drifted signatures.
 
-Steps 1-6 are fast (no compilation, no runtime startup). The type checker is the inner loop — it must be fast and its errors must be good enough for the AI to converge. `sync` ensures implementations stay aligned with the graph automatically, so the AI never has to fix signature drift manually.
+**Query.** AI uses graph query commands to understand context before making changes:
+- `graphlang show <node>` — inspect a node's full definition, edges, and resolved types
+- `graphlang deps <node>` — see what a node depends on
+- `graphlang impact <node>` — see what depends on a node (blast radius)
+- `graphlang trace <projection> <entity>` — trace the full path from UI to data
+
+**Validate.** Two checkers run in tandem, each catching different error classes:
+1. `graphlang check` — graph errors (type contracts, entity integrity, behavior sequencing, projection bindings). Fix these by editing `.gln` files.
+2. `tsc --noEmit --incremental` — implementation errors (function bodies don't match generated contracts in `contracts.gen.ts`). Fix these by editing `.ts` files.
+
+The correction path is always clear: graph errors → fix `.gln`, TypeScript errors → fix `.ts`. The AI never has to choose. `sync` ensures signatures stay aligned automatically, so the AI only ever fixes function bodies, never signatures.
+
+The full cycle is fast — no compilation, no runtime startup. `graphlang check` is the inner loop for graph correctness; `tsc` is the inner loop for implementation correctness. Both must be fast and their errors must be specific enough for AI to converge.
 
 ---
 
@@ -1487,12 +1540,13 @@ Steps 1-6 are fast (no compilation, no runtime startup). The type checker is the
 - **One declaration per file.** Each `.gln` file contains exactly one top-level declaration (one entity, one behavior, one projection, etc.). Filename is the snake_case form of the node name (e.g., `order.gln`, `place_order.gln`, `order_status.gln`). This keeps git diffs surgical — a single-field rename touches one file — and maximizes watch mode efficiency, since the dependency map is file → nodes → passes. No imports, no module system, no file-linking mechanism. The tooling recursively scans all `.gln` files in the project tree.
 - **Directory-structure-agnostic.** `graphlang check` processes every `.gln` file it finds regardless of directory layout. The node type is declared in the file content (`entity Order`, `behavior place_order`) — directory names add no information the tooling needs. Teams can organize by node type, by feature, or not at all. The spec does not prescribe a convention because the primary author is AI, which loads entire project context and doesn't navigate directories.
 - **Graph-as-source-of-truth.** The `.gln` graph is the authoritative program. TypeScript implementations behind compute modules, adapters, and components are managed artifacts — the toolchain generates their type contracts, creates stubs, and rewrites signatures when the graph changes. This eliminates split-brain drift between graph declarations and TS implementations.
-- **Deterministic correction paths.** Every error the type checker or contract checker produces has exactly one fix. The AI never has to choose between "fix the graph" or "fix the TS" — the graph wins, and the toolchain adjusts the TS to match.
+- **Deterministic correction paths.** Every error has a clear fix target. Graph errors from `graphlang check` → fix `.gln` files. TypeScript errors from `tsc` → fix `.ts` files. The AI never has to choose between "fix the graph" or "fix the TS" — the graph wins, and the toolchain adjusts the TS to match.
 - **One statement per line.** Trivial for AI to emit, trivial to diff in git.
 - **Explicit edges.** Every relationship is declared, never implicit.
 - **Typed everything.** Node types, field types, edge types — all explicit.
 - **Order-independent.** Declarations can appear in any order across any files. The parser resolves references after all files are loaded.
 - **No computation in the graph.** Computation lives in TypeScript modules, referenced by name.
+- **Queryable by design.** The graph is stored in SQLite, so every architectural question is a SQL query. "Which behaviors mutate User?" is a join. "What breaks if I rename Order.status?" is a dependency traversal. The CLI exposes this queryability to AI through structured commands (`show`, `deps`, `impact`, `trace`) — the AI's read interface to the application's architecture.
 
 ### 4.2 Syntax Reference
 
@@ -1704,6 +1758,30 @@ end
 - `on_delete cascade|nullify|restrict|deny`
 - `required true|false`
 - `inverse <edge_name>`
+
+#### Edge Vocabulary and Graph Topology
+
+The graph is a directed multigraph — nodes can have multiple edges of different types between them. The full edge vocabulary determines the graph's topology and is what makes it navigable. Every edge type listed below is stored in the `edges` table and is queryable via SQL (see Section 7 for the schema).
+
+| Edge Type | From Node | To Node | Created By | What It Means |
+| --- | --- | --- | --- | --- |
+| `has_one` | entity | entity | `edge` declaration | One-to-one relationship |
+| `has_many` | entity | entity | `edge` declaration | One-to-many relationship |
+| `belongs_to` | entity | entity | `edge` declaration | Inverse of has_one/has_many |
+| `many_to_many` | entity | entity | `edge` declaration | Many-to-many relationship |
+| `uses_compute` | behavior | compute | `compute_step` in behavior | Behavior calls a compute module |
+| `mutates` | behavior | entity | `mutate` block in behavior | Behavior writes to an entity |
+| `reads` | behavior | entity | `input` in behavior | Behavior reads from an entity |
+| `calls_adapter` | behavior | adapter | `adapter_step` in behavior | Behavior calls an external service |
+| `precondition` | behavior | constraint | `precondition` in behavior | Behavior requires a condition |
+| `triggers` | projection | behavior | `action submit` in projection | UI action submits to a behavior |
+| `binds` | projection | entity | `data` block in projection | Projection displays entity data |
+| `uses_component` | projection | component | `component` in layout | Projection embeds a custom component |
+| `listens` | listener | behavior | `trigger` in listener | Listener triggers a behavior on event |
+| `enforces` | policy | constraint | `require` in policy | Policy enforces a constraint |
+| `targets` | policy | entity/behavior | `on` in policy | Policy applies to a node |
+
+This vocabulary is what makes the graph navigable. "Which behaviors mutate User?" follows `mutates` edges backward. "What triggers when an order is placed?" follows `listens` edges from behaviors. "What's the blast radius of renaming Product.price?" traces `reads`, `mutates`, `binds`, and `uses_compute` edges transitively. Every architectural question maps to an edge traversal.
 
 #### Compute Modules
 
@@ -3135,7 +3213,24 @@ Implementations are **toolchain-managed, AI-authored artifacts**. The graph is t
 - **Same code, both runtimes.** The server imports the function directly. The client bundler includes it in the generated JS. No "compile once, deploy everywhere" complexity — it's just JavaScript.
 - **Generated contracts.** Implementations import their input/output types from `.graphlang/gen/contracts.gen.ts`. The toolchain creates stubs and maintains signatures — AI only needs to write function bodies.
 
-### 5.2 Compute Module Rules
+### 5.2 Two Type Systems in Tandem
+
+GraphLang uses two type systems working together, each with a clean division of responsibility:
+
+**Layer 1: The Graph Checker (`graphlang check`).** Operates on the graph in SQLite. Validates structural correctness — every edge has compatible types on both ends, every reference resolves, every behavior's compute steps produce what its mutations consume, every projection's bindings match entity fields. This is the 10-pass type checker described in Section 3.3. It catches errors that no single-file type checker can see because they span the full application graph.
+
+**Layer 2: TypeScript (`tsc --noEmit --incremental`).** Operates on implementation files in `impl/`. Validates that function bodies are correct TypeScript — they handle all cases, use the right types, and conform to the generated contracts in `.graphlang/gen/contracts.gen.ts`. This is standard TypeScript compilation with no custom plugins or transformations.
+
+**Why no custom contract checker is needed.** The toolchain generates `contracts.gen.ts` with exact type interfaces for every compute module, adapter action, and component. Implementation files import these types. When the graph changes, `graphlang sync` rewrites the imports and signatures. If an implementation doesn't match the contract, `tsc` catches it — wrong argument types, missing fields, incompatible return types are all standard TypeScript errors. The generated types _are_ the contract; `tsc` _is_ the contract checker.
+
+**Error routing.** When validation fails, the error source tells the AI what to fix:
+- Graph errors from `graphlang check` → fix `.gln` files (the graph is wrong)
+- TypeScript errors from `tsc` → fix `.ts` files (the implementation is wrong)
+- Missing implementation files → run `graphlang sync` to generate stubs
+
+The AI never has to choose between fixing the graph or fixing the implementation. The graph always wins, and the toolchain adjusts the TypeScript boundary to match.
+
+### 5.3 Compute Module Rules
 
 Compute modules must be **pure functions** — no side effects, no external state. The build step enforces this with a lint pass:
 
@@ -3158,7 +3253,7 @@ Violations are build errors, not warnings.
 
 **Compute modules and impurity:** Because compute modules are lint-enforced pure functions (no I/O, no side effects, no non-determinism), they never contribute to impurity in the type checker's impurity tracking. The four impurity sources — adapter calls, components, `render(raw)`, and `json` type — are all outside the compute layer. A behavior's compute steps don't affect its `ImpurityInfo`; only its adapter calls and `render(raw)` usage do. This is by design: the compute layer is the provably pure core of every GraphLang application.
 
-### 5.3 Example Compute Modules
+### 5.4 Example Compute Modules
 
 All compute modules follow the single-object-arg convention: import types from `.graphlang/gen/contracts.gen`, export `compute_<id>` with typed input/output.
 
@@ -3303,7 +3398,7 @@ export function compute_markdown_to_html(
 }
 ```
 
-### 5.4 Compute Module Loading
+### 5.5 Compute Module Loading
 
 ```typescript
 // Server: import via generated registry
@@ -3332,7 +3427,7 @@ const result = compute_validate_password_strength({
 
 No loader, no runtime, no marshaling. Functions are imported and called directly.
 
-### 5.5 Generated Contract Surface
+### 5.6 Generated Contract Surface
 
 On every `graphlang sync` and `graphlang build`, the toolchain generates `.graphlang/gen/` from the graph:
 
@@ -3436,34 +3531,20 @@ export const registry = {
 };
 ```
 
-**Contract check is always-on.** On every `check` and `build`, the toolchain verifies that every implementation file:
+**`tsc` is the contract checker.** The generated types in `contracts.gen.ts` define exact interfaces for every compute module, adapter action, and component. Implementation files import these types. When `tsc --noEmit` runs, it validates that every implementation matches its generated contract — wrong argument types, missing fields, incompatible return types are all standard TypeScript compilation errors. No custom contract checking logic is needed.
 
-- Exists at the canonical (or overridden) path
-- Exports the correctly-named function
-- Imports types from `contracts.gen.ts` (not inline types)
-- Has a signature that matches the generated contract
-
-Mismatches are structured errors:
+**Missing implementation files** are still detected by `graphlang check`. The graph checker knows which compute/adapter/component nodes exist and can verify that their implementation files are present at the expected paths:
 
 ```
-ERROR [contract-missing-impl] (global)
+ERROR [missing-impl] (global)
   Compute module 'calculate_discount' has no implementation file.
   Expected: impl/compute/calculate_discount.ts
   Run 'graphlang sync' to generate a stub.
-
-ERROR [contract-wrong-export] impl/compute/verify_password.ts
-  Expected export: compute_verify_password
-  Found exports: verify_password
-  Run 'graphlang sync' to fix the export name.
-
-ERROR [contract-signature-drift] impl/compute/hash_password.ts
-  Export 'compute_hash_password' signature does not match graph contract.
-  Expected input: Compute_hash_password_Input (from contracts.gen.ts)
-  Found input: { password: string }
-  Run 'graphlang sync' to rewrite the signature.
 ```
 
-### 5.6 Enum Type Mapping to TypeScript
+**Purity lint** remains a separate concern — `tsc` can't detect that a function calls `fetch()` or uses `Math.random()`. The purity lint pass (Section 5.3) catches these violations at build time.
+
+### 5.7 Enum Type Mapping to TypeScript
 
 Tagged enums map to TypeScript discriminated unions. The discriminant field is always `variant`:
 
@@ -3530,9 +3611,9 @@ export function compute_describe_shape(
 }
 ```
 
-The contract check validates that the TypeScript discriminated union in `types.gen.ts` matches the graph's enum declaration — same variant names, same field names and types, `variant` as discriminant. Since types are generated from the graph, drift is impossible.
+`tsc` validates that implementations using these types are correct — the TypeScript discriminated union in `types.gen.ts` is generated directly from the graph's enum declaration with matching variant names, field names, field types, and `variant` as discriminant. Since types are generated from the graph, drift is impossible.
 
-### 5.7 Implementation Sync and Signature Lock
+### 5.8 Implementation Sync and Signature Lock
 
 `graphlang sync` manages the boundary between graph declarations and TypeScript implementations. It is the only command that writes to `impl/` and `.graphlang/gen/`.
 
@@ -3572,7 +3653,7 @@ The contract check validates that the TypeScript discriminated union in `types.g
 }
 ```
 
-### 5.8 Runtime Validators
+### 5.9 Runtime Validators
 
 The generated `validators.gen.ts` provides runtime validation for values that cross trust boundaries — adapter outputs and component events. These are the two places where the type system's guarantees thin out: the graph declares what should come back, but the external service or opaque component might return anything.
 
@@ -3780,9 +3861,23 @@ Runs all 10 type checker passes against the provided database and returns all er
 
 ---
 
-## 7. Graph Store (SQLite)
+## 7. The Graph Model
 
-### 7.1 Schema
+The graph is the application's architecture made concrete. Every entity, relationship, behavior, projection, policy, and adapter is a node. Every dependency, data flow, and reference is an edge. The graph is stored in SQLite — not because the data is relational, but because SQLite is a query engine. Every architectural question the type checker, CLI, or AI needs to ask is a SQL query over the same two tables.
+
+**Why SQLite for the graph:**
+- **Queryability.** "Which behaviors mutate User?" is a SQL join, not custom traversal code. As the tooling grows more sophisticated, you add queries, not code.
+- **Tool reuse.** The type checker, CLI query commands, compiler, and runtime all read from the same store. One representation, many readers.
+- **Incremental update.** When a `.gln` file changes, the parser updates only the affected nodes and edges in SQLite. Downstream tools re-query and see the updated graph immediately.
+- **In-memory speed.** The graph is small enough to fit entirely in SQLite's cache. WAL mode with `better-sqlite3` (synchronous, not async) gives in-memory performance with SQL's expressiveness.
+
+### 7.1 Graph Topology
+
+The graph is a directed multigraph: nodes can have multiple edges of different types between them. Node types correspond to the DSL's declaration types (entity, edge, compute, behavior, projection, constraint, policy, component, adapter, listener, enum). Edge types capture every kind of relationship between nodes — see the edge vocabulary table in Section 4.2 for the complete catalogue.
+
+Every edge is stored with `from_node`, `to_node`, and `type`. Properties on edges (like `on_delete` for relationship edges, or `field` for mutation edges) are stored as JSON. This uniform structure means that graph traversal queries are always joins on the same `edges` table with filters on `type` — no special-casing per edge kind.
+
+### 7.2 Schema
 
 ```sql
 -- Graph structure (populated at build time from .gln files)
@@ -3833,7 +3928,7 @@ CREATE INDEX idx_nodes_type ON nodes(type);
 CREATE INDEX idx_entity_data_type ON entity_data(entity_type);
 ```
 
-### 7.2 Configuration
+### 7.3 Configuration
 
 ```typescript
 import Database from "better-sqlite3";
@@ -3844,7 +3939,7 @@ db.pragma("synchronous = NORMAL"); // Balance safety/speed
 db.pragma("cache_size = -64000"); // 64MB cache — entire graph fits in memory
 ```
 
-### 7.3 Tagged Enum Storage
+### 7.4 Tagged Enum Storage
 
 Tagged enum values in `entity_data` are stored as JSON objects with a `variant` discriminant field:
 
@@ -4088,11 +4183,13 @@ Runtime validation is especially important for adapter calls, where the response
 
 ### 10.1 CLI Commands
 
+**Build commands:**
+
 ```bash
 # Sync graph → implementations (generates contracts, creates stubs, rewrites signatures)
 graphlang sync ./app/
 
-# Read-only type check + contract check (no file mutations)
+# Read-only graph type check (no file mutations)
 graphlang check ./app/
 graphlang check ./app/ --format json
 
@@ -4106,30 +4203,67 @@ graphlang dev ./app/ --port 3000
 graphlang seed ./app/ --data ./seed.json
 ```
 
+**Graph query commands** (the AI's read interface):
+
+```bash
+# Show a node's full definition, edges, and resolved types
+graphlang show User
+graphlang show place_order --format json
+
+# Trace the full path from a projection to an entity
+graphlang trace checkout_page Order
+
+# Show what a node depends on (its inputs)
+graphlang deps place_order
+
+# Show what depends on a node (blast radius of changing it)
+graphlang impact User
+
+# Standalone impurity audit summary
+graphlang audit ./app/
+```
+
 **Command semantics:**
 
 - `sync` — mutates `impl/` and `.graphlang/gen/`. The only command allowed to create/rewrite implementation files. Generates contracts, creates stubs for missing implementations, rewrites drifted signatures, updates the manifest.
-- `check` — read-only diagnostics. Reports type errors AND contract errors but never writes files.
+- `check` — read-only graph diagnostics. Reports type errors but never writes files. Runs Phase 1 of the build pipeline only.
 - `build` — calls `sync` first, then compiles and bundles. Fails if sync produces errors.
 - `dev` — calls `sync` on `.gln` file changes, then incrementally re-checks.
+- `show` — reads a single node from SQLite and displays its type, properties, edges (with targets), and resolved types. `--format json` for AI consumption.
+- `trace` — performs a recursive graph traversal from a projection node to an entity node, showing the full chain of edges (projection → behavior → compute → entity).
+- `deps` — shows all nodes that the given node depends on (outgoing edges, transitively).
+- `impact` — shows all nodes that depend on the given node (incoming edges, transitively). This is the blast radius — what breaks if you change this node.
+- `audit` — runs the impurity analysis passes and prints the impurity audit summary without running the full type checker.
 
-### 10.2 Build Steps
+### 10.2 Build Pipeline
 
-1. **Parse** all `.gln` files → in-memory AST
-2. **Write to SQLite** → nodes and edges tables
-3. **Type Check** → query SQLite, validate all contracts, report errors
-4. **If type errors → STOP.** Output all errors. Do not proceed.
-5. **Generate `.graphlang/gen/`** → types, contracts, validators, registry
-6. **Sync implementations** → create stubs, rewrite signatures, update manifest
-7. **Contract Check** → verify all impl files match generated contracts
-8. **If contract errors → STOP.** Output errors with "run graphlang sync" suggestions.
-9. **Run tests** → execute compute, type checker, and behavior test suites
+The build runs as three phases. Each phase gates the next — errors stop the pipeline.
+
+**Phase 1: Graph** (runs on `graphlang check`, `graphlang build`, `graphlang dev`)
+
+1. Parse changed `.gln` files → AST
+2. Update SQLite graph store (nodes + edges tables) — incremental, only changed files
+3. Run graph type checker (all 10 passes) → query SQLite, validate all edge contracts
+4. **If graph errors → STOP.** Output all errors. Do not proceed.
+
+**Phase 2: Implementations** (runs on `graphlang build`, `graphlang dev`)
+
+5. Generate `.graphlang/gen/` → types, contracts, validators, registry
+6. Sync implementations → create stubs for missing impls, rewrite drifted signatures, update manifest
+7. Run `tsc --noEmit --incremental` → validate all implementation files against generated contracts
+8. **If TypeScript errors → STOP.** Output errors. AI fixes `.ts` files.
+
+**Phase 3: Build artifacts** (runs on `graphlang build` only)
+
+9. Run tests → execute compute, type checker, and behavior test suites
 10. **If test failures → STOP.**
-11. **Compile Client JS** → projection compiler generates `.js` per projection
-12. **Lint CSS** → PostCSS plugin validates `data-gl-*` selectors
-13. **Bundle CSS** → concatenate and minify
-14. **Copy runtime** → shared `graphlang-runtime.js`
-15. **Report** → summary
+11. Compile client JS → projection compiler generates `.js` per projection
+12. Lint CSS → PostCSS plugin validates `data-gl-*` selectors
+13. Bundle CSS → concatenate and minify
+14. Copy runtime → shared `graphlang-runtime.js`
+15. Report → summary
+
+`graphlang check` runs Phase 1 only — fast graph validation. Full validation (graph + implementations) is Phase 1 + Phase 2. `graphlang build` runs all three phases.
 
 ### 10.3 Output Structure
 
@@ -4189,16 +4323,16 @@ The prototype tests the core thesis:
 
 **The core success metric:** AI edit reliability. Measure how often AI-generated graph modifications pass the type checker on the first try, and how many iterations it takes to converge when they don't.
 
-### Phase 1: Parser + SQLite + Type Checker (Weeks 1-2)
+### Phase 1: Graph Store + Type Checker + Query Commands (Weeks 1-2)
 
-**Goal:** Parse `.gln` files into SQLite. Type-check everything. Produce excellent errors.
+**Goal:** Build the graph store, type checker, and query commands. Parse `.gln` files into SQLite. Type-check everything. Make the graph queryable. Produce excellent errors.
 
-This is the most important phase. The type checker is the product.
+This is the most important phase. The graph store and type checker together are the product — the graph makes architecture explicit, and the type checker enforces it.
 
 1. TypeScript project setup
 2. Lexer (tokenizer)
 3. Recursive descent parser for all node types (including `match` in projections)
-4. Write parsed graph to SQLite (nodes + edges tables)
+4. SQLite graph store (nodes + edges tables) — the foundation everything else queries
 5. **Type checker passes 1-10** (the bulk of the work):
    - Pass 1: Entity integrity
    - Pass 2: Edge integrity
@@ -4213,8 +4347,9 @@ This is the most important phase. The type checker is the product.
 6. Record subtyping implementation
 7. Error output formatting (console + JSON)
 8. CLI: `graphlang check`
+9. CLI graph query commands: `graphlang show`, `graphlang deps`, `graphlang impact`, `graphlang trace`
 
-**Test:** Write intentionally broken `.gln` files. Verify the type checker catches every error with specific, actionable messages. Feed the errors to Claude and verify it can fix them.
+**Test:** Write intentionally broken `.gln` files. Verify the type checker catches every error with specific, actionable messages. Feed the errors to Claude and verify it can fix them. Verify query commands return correct, structured output for the example application.
 
 ### Phase 2: Compute Modules + CSS Pipeline (Week 3)
 
@@ -4224,13 +4359,13 @@ This is the most important phase. The type checker is the product.
 2. Purity lint pass (no fs, no fetch, no DOM, no randomness)
 3. Code generation pipeline (types.gen.ts, contracts.gen.ts, validators.gen.ts, registry.gen.ts)
 4. `graphlang sync` command (stub creation, signature rewriting, manifest)
-5. Contract checker (always-on, verify TS signatures match graph declarations — hard fail)
+5. `tsc --noEmit --incremental` integration for contract validation
 6. Client bundler includes compute functions used in projections
 7. PostCSS lint plugin (validate `data-gl-*` selectors against graph)
 8. CSS bundling (concatenate + minify source CSS files)
 9. Base CSS theme with design tokens and data-attribute styles
 
-**Test:** `compute_validate_password_strength({ password: "Weak" })` returns `{ valid: false, reason: "Must be at least 8 characters" }`. PostCSS lint catches a typo in a CSS selector referencing a graph node. `graphlang sync` creates stubs for all compute modules and generates correct contracts.
+**Test:** `compute_validate_password_strength({ password: "Weak" })` returns `{ valid: false, reason: "Must be at least 8 characters" }`. PostCSS lint catches a typo in a CSS selector referencing a graph node. `graphlang sync` creates stubs for all compute modules and generates correct contracts. `tsc` catches signature mismatches against generated contracts.
 
 ### Phase 3: Server Runtime + HTML Rendering (Week 4)
 
@@ -4330,7 +4465,7 @@ graphlang/
 │   ├── compute/
 │   │   ├── loader.ts               # Import and call compute functions
 │   │   ├── lint.ts                 # Validate purity rules (no fs, no fetch, etc.)
-│   │   └── contract-check.ts       # Verify TS signatures match graph declarations (always-on, hard fail)
+│   │   └── purity-check.ts         # Verify purity rules beyond what tsc catches
 │   ├── runtime/
 │   │   ├── server.ts               # Hono HTTP server
 │   │   ├── router.ts               # Route resolver
@@ -4469,41 +4604,48 @@ graphlang/
 
 ## 14. Success Criteria
 
+### Graph Model (Primary)
+
+1. Full application architecture (entities, relationships, behaviors, projections, policies, adapters, components, listeners) is representable as a typed graph in SQLite
+2. `graphlang show`, `graphlang trace`, `graphlang deps`, and `graphlang impact` commands return correct, structured output
+3. AI can query graph structure to understand architecture without reading source files — dependency analysis, blast radius, and data flow tracing all work through CLI commands
+4. The graph is the single source of truth — every tool (type checker, compiler, runtime, CLI) reads from the same SQLite store
+
 ### Type System (Primary)
 
-1. Type checker catches renamed fields, mismatched params, wrong types, missing required fields, invalid traversals — all with specific error messages
-2. Error messages include: what's wrong, where, what was expected, what was received, and a fix suggestion
-3. AI (Claude) can read error output and fix the graph in ≤2 iterations
-4. JSON error output is parseable by AI tooling
+5. Type checker catches renamed fields, mismatched params, wrong types, missing required fields, invalid traversals — all with specific error messages
+6. Error messages include: what's wrong, where, what was expected, what was received, and a fix suggestion
+7. AI (Claude) can read error output and fix the graph in ≤2 iterations
+8. JSON error output is parseable by AI tooling
 
 ### Testing (Primary)
 
-5. Every compute module has tests; full compute test suite completes in under 100ms
-6. Type checker tests cover all 10 passes with both valid and invalid fixture graphs
-7. Behavior tests cover the happy path and key failure cases without network or disk I/O
-8. `graphlang check` (type check + test run) completes in under 3 seconds on the prototype application
-9. Watch mode delivers feedback in under 1 second for targeted single-file changes
+9. Every compute module has tests; full compute test suite completes in under 100ms
+10. Type checker tests cover all 10 passes with both valid and invalid fixture graphs
+11. Behavior tests cover the happy path and key failure cases without network or disk I/O
+12. `graphlang check` (type check + test run) completes in under 3 seconds on the prototype application
+13. Watch mode delivers feedback in under 1 second for targeted single-file changes
 
 ### Runtime (Secondary)
 
-10. Server renders working HTML from projection nodes
-11. Client JS is generated from projections — no hand-written JS
-12. Compute modules run identically on server and client (same TypeScript, same runtime)
-13. Behaviors execute: preconditions → compute → adapters → mutations → effects
-14. Policies enforce access control
-15. Components render within projections with typed prop/event bindings validated by the type checker
-16. Adapter calls in behaviors execute with typed contracts and proper error handling
-17. Render compute modules inject format-typed, sanitized markup into projections
+14. Server renders working HTML from projection nodes
+15. Client JS is generated from projections — no hand-written JS
+16. Compute modules run identically on server and client (same TypeScript, same runtime)
+17. Behaviors execute: preconditions → compute → adapters → mutations → effects
+18. Policies enforce access control
+19. Components render within projections with typed prop/event bindings validated by the type checker
+20. Adapter calls in behaviors execute with typed contracts and proper error handling
+21. Render compute modules inject format-typed, sanitized markup into projections
 
 ### Impurity Tracking
 
-18. Impurity audit identifies all impurity sources with zero false negatives — every adapter call, component usage, `render(raw)` directive, and `json` type hole is reported
-19. Impurity propagation correctly marks transitive impurity through listener→behavior and projection→behavior chains
-20. Generated runtime validators (`validators.gen.ts`) validate adapter outputs against declared types (hard fail in dev/test, configurable in prod)
+22. Impurity audit identifies all impurity sources with zero false negatives — every adapter call, component usage, `render(raw)` directive, and `json` type hole is reported
+23. Impurity propagation correctly marks transitive impurity through listener→behavior and projection→behavior chains
+24. Generated runtime validators (`validators.gen.ts`) validate adapter outputs against declared types (hard fail in dev/test, configurable in prod)
 
 ### Thesis Validation (Ultimate)
 
-21. AI-modified graphs with type checking have a measurably lower error rate than AI-modified React code for equivalent changes
+25. AI-modified graphs with type checking have a measurably lower error rate than AI-modified React code for equivalent changes
 
 ---
 
@@ -4523,7 +4665,7 @@ graphlang/
 12. **Record type versioning.** When a record type in a component prop changes shape, should the type checker suggest fixes across the graph? Nice to have, not essential — the errors alone are sufficient.
 13. **Match branch DOM cleanup.** Outgoing match branches may contain components that need unmounting and event listeners that need removal. Answered by #7 — unmount fires on branch exit. The compiler generates cleanup code per branch.
 14. **Server-side match rendering.** When match depends on server data and a behavior changes that data, how does the client update? Prototype: behavior response includes a redirect, page reloads with the correct branch rendered server-side.
-15. ~~**Compute contract verification.**~~ **Resolved.** Contract check is always-on and hard-fails. The toolchain generates canonical signatures; implementations must match exactly.
+15. ~~**Compute contract verification.**~~ **Resolved.** `tsc --noEmit` validates implementations against generated contracts in `contracts.gen.ts`. No custom contract checker needed — TypeScript's own compiler enforces the contracts.
 16. **`--strict-purity` flag.** Should there be a CLI flag that promotes `json-type-hole` and `render-raw-unsafe` warnings to errors? Useful for teams that want to enforce purity standards in CI. Prototype: warnings only. Production: opt-in flag.
 17. ~~**Runtime adapter validation strictness.**~~ **Resolved.** Generated validators from `validators.gen.ts` validate adapter outputs at runtime. Dev/test: hard fail. Prod: configurable via `--strict-runtime`.
 18. **Flat enum to tagged enum migration.** When upgrading a flat `enum(pending, shipped, cancelled)` field to a tagged enum `OrderStatus`, existing `entity_data` rows contain bare strings. The migration tool needs to map `"pending"` → `{ "variant": "Pending" }`. Prototype: wipe and re-seed. Production: automated migration script.
