@@ -16,7 +16,7 @@ Today's AI writes code designed for humans to read and maintain (React, Python, 
 
 GraphLang splits application development into two layers:
 
-1. **The Graph Layer** — a declarative graph of typed nodes and edges that defines the application's structure: entities, relationships, UI projections, behaviors, policies, events. The graph handles *what connects to what* — the architectural wiring that AI struggles with in traditional codebases because it's implicit and scattered.
+1. **The Graph Layer** — a declarative graph of typed nodes and edges that defines the application's structure: entities, relationships, UI projections, behaviors, policies, events. The graph handles _what connects to what_ — the architectural wiring that AI struggles with in traditional codebases because it's implicit and scattered.
 
 2. **The Compute Layer** — small, pure TypeScript functions that handle actual computation: math, string processing, data transformation, validation logic. These are bounded, testable, side-effect-free functions that AI writes reliably.
 
@@ -36,7 +36,7 @@ This is what makes the graph AI-friendly. Not the syntax. Not the declarative st
 
 ### Typed Boundaries, Not Closed Vocabularies
 
-The graph does not try to express everything. It expresses every *boundary* with types.
+The graph does not try to express everything. It expresses every _boundary_ with types.
 
 The built-in projection primitives (`section`, `card`, `grid`, `field`, `action`) cover common UI patterns. But real applications need charts, drag-and-drop, rich text editors, custom visualizations, and third-party integrations. Rather than expanding the primitive set forever, GraphLang handles extensibility through **typed boundaries**:
 
@@ -52,12 +52,12 @@ The graph's type system provides strong guarantees — but four constructs weake
 
 The four impurity sources:
 
-1. **Adapter calls.** External I/O (Stripe, SendGrid, databases). The type system checks that you pass the right inputs and declare the right outputs, but it can't verify that the external service actually returns what the adapter declares. The response shape is a *promise*, not a *proof*.
+1. **Adapter calls.** External I/O (Stripe, SendGrid, databases). The type system checks that you pass the right inputs and declare the right outputs, but it can't verify that the external service actually returns what the adapter declares. The response shape is a _promise_, not a _proof_.
 2. **Components.** Opaque DOM manipulation behind a typed prop/event boundary. The type system checks the wiring (props in, events out), but the component's internal behavior — what it renders, what side effects it triggers — is invisible to the graph.
 3. **`render(raw)`.** Unsanitized markup injection. The type system tracks that a compute module returns `render(raw)` instead of `render(html_safe)` or `render(svg)`, but it can't verify the markup is safe. This is the XSS escape hatch.
 4. **`json` type.** A type-system hole. Any field, parameter, or output typed as `json` bypasses structural checking. The type checker can't verify field access, shape compatibility, or subtyping on `json` values.
 
-**Impurity is inferred, not annotated.** The type checker detects impurity automatically by analyzing the graph — behaviors that call adapters are impure, projections that use components or `render(raw)` are impure. There's no `@impure` annotation in the DSL that could drift out of sync. The graph *is* the source of truth.
+**Impurity is inferred, not annotated.** The type checker detects impurity automatically by analyzing the graph — behaviors that call adapters are impure, projections that use components or `render(raw)` are impure. There's no `@impure` annotation in the DSL that could drift out of sync. The graph _is_ the source of truth.
 
 **Impurity propagates.** A behavior that calls an adapter is impure. A listener that triggers an impure behavior is transitively impure. A projection whose action submits to an impure behavior is impure. The type checker traces these chains and marks every node that inherits impurity from its dependencies.
 
@@ -96,7 +96,7 @@ The feedback loop target: **under 1 second after every save**, with a ceiling of
 ┌──────────────────────────────────────────────────────────────┐
 │                     Source Files                             │
 │                                                              │
-│  .gln files      .ts files       .css files    .ts files   │
+│  .gln files      .ts files       .css files    .ts files     │
 │  (structure &      (compute —      (styling &    (component  │
 │   flow — DSL)      pure fns)       transitions)  impls)      │
 └──────┬─────────────────┬───────────────┬──────────────┬──────┘
@@ -144,18 +144,18 @@ The feedback loop target: **under 1 second after every save**, with a ceiling of
 
 ### Key Architectural Boundaries
 
-| Concern | Handled By | Why |
-|---------|-----------|-----|
-| Entities, relationships | Graph nodes + edges | Structural — what connects to what |
-| UI structure & layout | Projection nodes in graph | Declarative — what to show, not how |
-| Client-side interactivity | Compiled from graph → JS | Reactive bindings, state, events derived from projections |
-| Custom UI (charts, drag-drop, editors) | Components with typed props/events | Opaque JS behind typed boundary, mount/update/unmount contract |
-| Dynamic markup | Render compute modules (TS → sanitized HTML) | Sparklines, markdown, SVG computed in TypeScript, format-typed |
-| Business logic flow | Behavior nodes in graph | Event → precondition → compute → adapter → mutation → effect |
-| Access control | Policy + constraint nodes | Declarative rules attached via edges |
-| Computation | Pure TypeScript functions | Same code on server and client, AI writes it reliably |
-| External services | Typed adapters with action contracts | Stripe, email, analytics — typed I/O, opaque implementation |
-| Styling | CSS source files | Full CSS power, PostCSS lint validates graph references |
+| Concern                                | Handled By                                   | Why                                                            |
+| -------------------------------------- | -------------------------------------------- | -------------------------------------------------------------- |
+| Entities, relationships                | Graph nodes + edges                          | Structural — what connects to what                             |
+| UI structure & layout                  | Projection nodes in graph                    | Declarative — what to show, not how                            |
+| Client-side interactivity              | Compiled from graph → JS                     | Reactive bindings, state, events derived from projections      |
+| Custom UI (charts, drag-drop, editors) | Components with typed props/events           | Opaque JS behind typed boundary, mount/update/unmount contract |
+| Dynamic markup                         | Render compute modules (TS → sanitized HTML) | Sparklines, markdown, SVG computed in TypeScript, format-typed |
+| Business logic flow                    | Behavior nodes in graph                      | Event → precondition → compute → adapter → mutation → effect   |
+| Access control                         | Policy + constraint nodes                    | Declarative rules attached via edges                           |
+| Computation                            | Pure TypeScript functions                    | Same code on server and client, AI writes it reliably          |
+| External services                      | Typed adapters with action contracts         | Stripe, email, analytics — typed I/O, opaque implementation    |
+| Styling                                | CSS source files                             | Full CSS power, PostCSS lint validates graph references        |
 
 ### Why SQLite
 
@@ -196,6 +196,7 @@ SELECT * FROM path WHERE node_id IN (SELECT id FROM nodes WHERE type = 'entity')
 With an in-memory graph (Map + Array), each of these queries is custom traversal code. With SQLite, every new query is just SQL. As the type checker grows more sophisticated, you add queries, not code.
 
 Additional benefits:
+
 - Entity data (runtime application data) uses the same engine — one transaction model, no impedance mismatch
 - SQLite's `json_extract` functions let you query into node properties stored as JSON blobs
 - WAL mode with `better-sqlite3` (synchronous, not async) gives in-memory speed with SQL queryability
@@ -212,6 +213,7 @@ Additional benefits:
 Every edge in the graph is a typed contract. When node A connects to node B via an edge, the type system verifies that what A produces is compatible with what B expects. Build fails if any contract is violated.
 
 The type system is:
+
 - **Structural.** Types are defined by their shape (fields and their types), not by name. Two entity types with the same field structure are not interchangeable — nominal typing at the entity level, structural typing at the field level.
 - **Complete.** Every reference, every parameter pass, every field access, every binding — all type-checked. No unchecked edges.
 - **Specific in errors.** Every error includes: what went wrong, where it went wrong (source file, line, node path), what was expected, what was received, and a suggestion for fixing it.
@@ -224,101 +226,147 @@ At build time, the type checker constructs a complete type map of the applicatio
 ```typescript
 interface TypeMap {
   // Entity field types
-  entities: Map<string, {
-    fields: Map<string, FieldType>;
-    edges: Map<string, { target: string; cardinality: string }>;
-  }>;
+  entities: Map<
+    string,
+    {
+      fields: Map<string, FieldType>;
+      edges: Map<string, { target: string; cardinality: string }>;
+    }
+  >;
 
   // Compute module signatures
-  computes: Map<string, {
-    inputs: Map<string, ResolvedType>;
-    outputs: Map<string, ResolvedType>;
-  }>;
+  computes: Map<
+    string,
+    {
+      inputs: Map<string, ResolvedType>;
+      outputs: Map<string, ResolvedType>;
+    }
+  >;
 
   // Constraint parameter types
-  constraints: Map<string, {
-    params: Map<string, ResolvedType>;
-    traversals: TraversalPath[];  // validated against entity edges
-  }>;
+  constraints: Map<
+    string,
+    {
+      params: Map<string, ResolvedType>;
+      traversals: TraversalPath[]; // validated against entity edges
+    }
+  >;
 
   // Behavior context types (what's available at each point in execution)
-  behaviors: Map<string, {
-    inputs: Map<string, ResolvedType>;
-    target_entity: string | null;
-    compute_results: Map<string, ResolvedType>;  // accumulated as compute steps execute
-    available_at_mutate: Map<string, ResolvedType>;  // everything available when mutations run
-    impurity: ImpurityInfo;  // inferred by Pass 5 + Pass 8
-  }>;
+  behaviors: Map<
+    string,
+    {
+      inputs: Map<string, ResolvedType>;
+      target_entity: string | null;
+      compute_results: Map<string, ResolvedType>; // accumulated as compute steps execute
+      available_at_mutate: Map<string, ResolvedType>; // everything available when mutations run
+      impurity: ImpurityInfo; // inferred by Pass 5 + Pass 8
+    }
+  >;
 
   // Projection binding types
-  projections: Map<string, {
-    data_bindings: Map<string, ResolvedType>;
-    state: Map<string, ResolvedType>;
-    derived: Map<string, ResolvedType>;
-    forms: Map<string, {
-      fields: Map<string, ResolvedType>;
-      target_entity: string | null;
-    }>;
-    impurity: ImpurityInfo;  // inferred by Pass 8
-  }>;
+  projections: Map<
+    string,
+    {
+      data_bindings: Map<string, ResolvedType>;
+      state: Map<string, ResolvedType>;
+      derived: Map<string, ResolvedType>;
+      forms: Map<
+        string,
+        {
+          fields: Map<string, ResolvedType>;
+          target_entity: string | null;
+        }
+      >;
+      impurity: ImpurityInfo; // inferred by Pass 8
+    }
+  >;
 
   // Enum (tagged union) definitions
-  enums: Map<string, {
-    variants: Map<string, {
-      fields: Map<string, ResolvedType>;  // empty for fieldless variants
-    }>;
-  }>;
+  enums: Map<
+    string,
+    {
+      variants: Map<
+        string,
+        {
+          fields: Map<string, ResolvedType>; // empty for fieldless variants
+        }
+      >;
+    }
+  >;
 
   // Listener impurity tracking (inferred by Pass 8)
-  listeners: Map<string, {
-    event: string;
-    triggers_behavior: string;
-    impurity: ImpurityInfo;
-  }>;
+  listeners: Map<
+    string,
+    {
+      event: string;
+      triggers_behavior: string;
+      impurity: ImpurityInfo;
+    }
+  >;
 
   // json type usage tracking (collected by Pass 8)
   json_usages: JsonUsage[];
 }
 
 interface ResolvedType {
-  base: 'string' | 'integer' | 'decimal' | 'boolean' | 'uuid' | 'timestamp'
-      | 'enum' | 'tagged_enum' | 'text' | 'json' | 'list' | 'record' | 'entity_ref' | 'render';
-  format?: string;        // 'email', 'url', 'phone'
+  base:
+    | "string"
+    | "integer"
+    | "decimal"
+    | "boolean"
+    | "uuid"
+    | "timestamp"
+    | "enum"
+    | "tagged_enum"
+    | "text"
+    | "json"
+    | "list"
+    | "record"
+    | "entity_ref"
+    | "render";
+  format?: string; // 'email', 'url', 'phone'
   enum_values?: string[];
   list_item_type?: ResolvedType;
-  record_fields?: Map<string, ResolvedType>;  // for record({...}) types
-  entity_ref_type?: string;  // which entity
-  tagged_enum_name?: string;     // e.g., 'Shape' — which declared enum
-  tagged_enum_variant?: string;  // when narrowed by match or require...is...as
-  render_format?: 'svg' | 'html_safe' | 'raw';  // for render(...) output types
+  record_fields?: Map<string, ResolvedType>; // for record({...}) types
+  entity_ref_type?: string; // which entity
+  tagged_enum_name?: string; // e.g., 'Shape' — which declared enum
+  tagged_enum_variant?: string; // when narrowed by match or require...is...as
+  render_format?: "svg" | "html_safe" | "raw"; // for render(...) output types
   nullable: boolean;
-  constraints: string[];  // 'unique', 'required', 'generated', 'sensitive', 'immutable'
+  constraints: string[]; // 'unique', 'required', 'generated', 'sensitive', 'immutable'
   min?: number;
   max?: number;
 }
 
 // Impurity source — why a node is impure
 type ImpuritySource =
-  | { kind: 'adapter_call'; adapter_id: string; action: string; behavior_id: string }
-  | { kind: 'component'; component_id: string; projection_id: string }
-  | { kind: 'render_raw'; compute_module: string; projection_id: string }
-  | { kind: 'json_type'; node_id: string; field_or_param: string }
-  | { kind: 'propagated'; from_node: string; chain: string[] };
+  | {
+      kind: "adapter_call";
+      adapter_id: string;
+      action: string;
+      behavior_id: string;
+    }
+  | { kind: "component"; component_id: string; projection_id: string }
+  | { kind: "render_raw"; compute_module: string; projection_id: string }
+  | { kind: "json_type"; node_id: string; field_or_param: string }
+  | { kind: "propagated"; from_node: string; chain: string[] };
 
 // Impurity metadata attached to behaviors, projections, and listeners
 interface ImpurityInfo {
   is_pure: boolean;
-  sources: ImpuritySource[];  // empty when is_pure === true
+  sources: ImpuritySource[]; // empty when is_pure === true
 }
 
 // Tracks every usage of the `json` type across the graph
 interface JsonUsage {
   node_id: string;
-  node_type: 'entity' | 'compute' | 'behavior' | 'adapter' | 'component';
+  node_type: "entity" | "compute" | "behavior" | "adapter" | "component";
   field_or_param: string;
+  justification: string; // from @justification annotation — required, enforced by Pass 1
   source_file: string;
   source_line: number;
-  suggestion: string;  // e.g., "Consider record({ status: string, data: string }) if shape is known"
+  suggestion: string; // e.g., "Consider record({ status: string, data: string }) if shape is known"
 }
 ```
 
@@ -349,13 +397,13 @@ ERROR [record-subtype-missing-field] projections.gln:45
   Projection 'admin_dashboard', component 'chart':
   Prop 'data' expects record({ label: string, value: decimal }).
   Binding resolves to list of entity 'Order'.
-  
+
   Order has field 'value': ✗ NOT FOUND
   Order has field 'label': ✗ NOT FOUND
-  
+
   Available fields on Order: id (uuid), status (enum), total (decimal),
     created_at (timestamp)
-  
+
   You may need a derived value to reshape the data:
     derived chart_data = monthly_sales | map({ label: month, value: total })
 ```
@@ -380,13 +428,16 @@ HAVING count > 1;
 ```
 
 Checks:
+
 - No duplicate field names within an entity
 - All field types are valid (string, integer, decimal, boolean, uuid, timestamp, enum, text, json)
 - Annotation values are valid for their field type (@min/@max on numeric types, @format on string, etc.)
 - Enum fields have at least one value
 - @default values match the field type
+- Every `json`-typed field, parameter, or output must have a `@justification("reason")` annotation explaining why a typed alternative isn't used. Missing justification is error code `json-missing-justification`.
 
 Errors:
+
 ```
 ERROR [entity-duplicate-field] entities.gln:5
   Entity 'User' has duplicate field 'email' (lines 5 and 8).
@@ -395,6 +446,11 @@ ERROR [entity-duplicate-field] entities.gln:5
 ERROR [entity-invalid-annotation] entities.gln:7
   Entity 'User', field 'name': @min(1) is not valid on type 'boolean'.
   @min is only valid on types: string, integer, decimal.
+
+ERROR [json-missing-justification] entities.gln:12
+  Entity 'Event', field 'metadata': type 'json' requires @justification annotation.
+  Add @justification("reason") explaining why a typed alternative (record, enum) isn't used.
+  Example: field metadata : json @justification("Event properties vary per event type — no fixed schema")
 ```
 
 **Enum integrity checks:**
@@ -417,6 +473,7 @@ HAVING count > 1;
 ```
 
 Checks:
+
 - No duplicate enum names
 - No conflicts between enum and entity names (shared namespace)
 - At least two variants per enum
@@ -426,6 +483,7 @@ Checks:
 - Variant fields can reference other enums and entities
 
 Errors:
+
 ```
 ERROR [enum-name-conflict] entities.gln:40
   Enum 'Order' conflicts with entity 'Order' (entities.gln:12).
@@ -464,12 +522,14 @@ AND (e.from_node NOT IN (SELECT id FROM nodes WHERE type = 'entity')
 ```
 
 Checks:
+
 - Both ends of every relationship edge point to existing entities
 - Cardinality type is valid
 - on_delete action is valid
 - No duplicate edges between the same pair with the same type
 
 Errors:
+
 ```
 ERROR [edge-missing-entity] entities.gln:42
   Edge 'OrderItem -> Products : belongs_to': target entity 'Products' does not exist.
@@ -482,12 +542,14 @@ ERROR [edge-missing-entity] entities.gln:42
 Verify all compute module declarations have valid type signatures.
 
 Checks:
+
 - All input/output types are valid
 - Source file paths exist (warning if not — they may not be written yet)
 - No duplicate compute module names
 - When an input or output type name matches a declared enum, it resolves as `tagged_enum` with `tagged_enum_name` set to the enum name
 
 Errors:
+
 ```
 ERROR [compute-invalid-type] compute.gln:12
   Compute module 'calculate_discount', input 'subtotal': type 'float' is not valid.
@@ -509,6 +571,7 @@ AND json_extract(step.value, '$.type') = 'traverse';
 ```
 
 Checks:
+
 - Parameter types are valid
 - Traversal paths follow valid entity edges (e.g., `target_entity -> user -> id` requires target_entity to have a `user` edge, and User to have an `id` field)
 - Assert expressions compare compatible types (no `string == integer`)
@@ -516,6 +579,7 @@ Checks:
 - `on_fail` expressions resolve to strings
 
 Errors:
+
 ```
 ERROR [constraint-invalid-traversal] constraints.gln:8
   Constraint 'is_owner', traversal 'target_entity -> user -> id':
@@ -554,16 +618,19 @@ GROUP BY b.id;
 Checks:
 
 **Input validation:**
+
 - All input types are valid
 - Input names are unique within the behavior
 
 **Precondition validation:**
+
 - Referenced constraints exist
 - Parameter names match the constraint's declared params
 - Parameter types match (e.g., if constraint expects `email_value: string`, the behavior must pass a string)
 - The `$target_*` variable type matches the constraint's `target_entity` param type
 
 **Compute step validation:**
+
 - Referenced compute modules exist
 - Parameter names match the module's declared inputs
 - Parameter types match
@@ -571,11 +638,13 @@ Checks:
 - When result fields are accessed later (e.g., `hash_result.hashed`), the compute module's declared outputs include that field name and the type is tracked forward
 
 **Require validation:**
+
 - Expression references valid compute result fields
 - Expression resolves to boolean
 - `require <expr> is <EnumName>.<Variant> as <binding>` validates that the expression is a tagged enum type, the variant exists on that enum, and the binding receives the variant's fields with correct types
 
 **Mutation validation:**
+
 - Target entity exists
 - Target field exists on that entity
 - Field is not `@generated` (can't mutate generated fields)
@@ -591,25 +660,28 @@ Checks:
   - Fieldless variants use `EnumName.Variant` without parentheses
 
 **Effect validation:**
+
 - `emit()` event names are valid identifiers
 - `notify()` channel is valid
 - Referenced templates exist (warning level, not error)
 
 **on_success / on_failure validation:**
+
 - `show_message()` and `navigate()` are valid response types
 - `navigate()` path is a valid route or expression
 
 Errors:
+
 ```
 ERROR [behavior-compute-param-mismatch] behaviors.gln:18
   Behavior 'update_password', compute step 'verify_result':
   Calling compute module 'verify_password' with param 'plain_text',
   but module expects 'plaintext'.
-  
+
   Module signature (compute.gln:8):
     input plaintext : string
     input hash : string
-  
+
   Did you mean 'plaintext'?
 
 ERROR [behavior-mutate-type-mismatch] behaviors.gln:24
@@ -617,10 +689,10 @@ ERROR [behavior-mutate-type-mismatch] behaviors.gln:24
   Field 'User.password_hash' expects type 'string'.
   'hash_result.hashed' resolves to type 'string'.
   ✓ Types match.
-  
+
   BUT: 'hash_result' comes from compute module 'hash_password',
   which declares output 'hash' not 'hashed'.
-  
+
   Available outputs from hash_password: hash (string)
   Did you mean 'hash_result.hash'?
 
@@ -688,6 +760,7 @@ AND json_extract(inp.value, '$.type') = 'json';
 ```
 
 Inference rules:
+
 - Behavior has adapter calls → `ImpurityInfo.is_pure = false`, source: `{ kind: 'adapter_call', ... }`
 - Behavior uses a compute module with `render(raw)` output → `ImpurityInfo.is_pure = false`, source: `{ kind: 'render_raw', ... }`
 - Behavior accepts `json`-typed inputs → source: `{ kind: 'json_type', ... }` (tracked but does not alone make a behavior impure — `json` is a type-system hole, not a side-effect source)
@@ -700,15 +773,18 @@ Verify projections have valid data bindings, state types, derived expressions, f
 Checks:
 
 **Data bindings:**
+
 - `auth.user` resolves to the User entity type
 - Field accessors on bindings reference valid entity fields
 - Bound fields are not `@sensitive` unless explicitly declared in projection
 
 **State:**
+
 - All state types are valid
 - Default values match the declared type
 
 **Derived values:**
+
 - Expressions reference valid state variables or data bindings
 - Filter/sort operations target valid fields on the list item type
 - Compute references match module signatures
@@ -717,6 +793,7 @@ Checks:
 - `when` conditions resolve to boolean
 
 **Form fields:**
+
 - `type()` is a valid field type
 - `validate format()` matches the field type
 - `validate compute()` references a valid module that returns a boolean
@@ -724,12 +801,14 @@ Checks:
 - `placeholder()` references a valid binding that resolves to the same type as the field
 
 **Actions:**
+
 - `submit_to behavior()` references an existing behavior
 - `send` names match the behavior's declared input names
 - `send` value types match the behavior's declared input types
 - `enabled_when` expressions reference valid state/form variables and resolve to boolean
 
 **Visibility/interactivity:**
+
 - `visible_when` expressions resolve to boolean
 - `on_click set` targets valid state variables with type-compatible values
 - `on_click append` targets list-type state variables with compatible item types
@@ -737,21 +816,22 @@ Checks:
 - `bind_value` targets state variables with types compatible with the field type
 
 Errors:
+
 ```
 ERROR [projection-send-mismatch] projections.gln:28
   Projection 'profile_edit', action 'update_email_btn':
   Sends 'email' to behavior 'update_email',
   but behavior expects input named 'new_email'.
-  
+
   Behavior 'update_email' inputs (behaviors.gln:5):
     new_email : string
-  
+
   Did you mean: send new_email = field(new_email).value
 
 ERROR [projection-binding-sensitive] projections.gln:12
   Projection 'profile_edit', data binding 'current_email = current_user.email':
   ✓ Valid — 'email' is not @sensitive.
-  
+
   WARNING: Binding 'current_user.password_hash' would fail here because
   'password_hash' is @sensitive. This is informational only — no action needed.
 
@@ -795,6 +875,7 @@ ERROR [match-destructure-invalid-field] projections.gln:70
 Verify policies reference valid constraints and apply to valid targets.
 
 Checks:
+
 - `applies_to` lists valid entity names or projection references
 - Rules reference valid constraints with correct parameter types
 - `$target` type matches the entity the policy applies to
@@ -802,14 +883,15 @@ Checks:
 - Every projection with `auth required` has a policy
 
 Errors:
+
 ```
 ERROR [policy-constraint-param] policies.gln:5
   Policy 'owner_access', rule 'allow read when is_owner(target: $target)':
   Constraint 'is_owner' expects param 'target_entity', not 'target'.
-  
+
   Constraint signature (constraints.gln:2):
     params target_entity : entity
-  
+
   Fix: is_owner(target_entity: $target)
 
 WARNING [policy-uncovered-entity] (global)
@@ -881,6 +963,7 @@ AND json_extract(b.properties, '$.trigger_projection') NOT IN (
 ```
 
 Checks:
+
 - No orphan nodes (nodes with no edges — warning level)
 - No unused compute modules (warning level)
 - No unused enums (warning level)
@@ -890,6 +973,7 @@ Checks:
 - All `navigate()` targets match a projection's route
 
 Warnings:
+
 ```
 WARNING [unused-compute] compute.gln:18
   Compute module 'generate_confirmation_code' is declared but never referenced
@@ -947,6 +1031,7 @@ AND json_extract(rd.value, '$.format') = 'raw';
 ```
 
 Propagation rules:
+
 - Listener triggers an impure behavior → listener is impure, source: `{ kind: 'propagated', from_node: behavior_id, chain: [...] }`
 - Projection action submits to an impure behavior → projection is impure, source: `{ kind: 'propagated', from_node: behavior_id, chain: [...] }`
 - Projection uses a component → projection is impure, source: `{ kind: 'component', ... }`
@@ -1001,9 +1086,11 @@ AND json_extract(p.value, '$.type') = 'json';
 ```
 
 Warnings:
+
 ```
 WARNING [json-type-hole] entities.gln:12
   Entity 'Order', field 'metadata': type is 'json'.
+  Justification: "Order metadata varies by integration source — no fixed schema"
   The type checker cannot verify field access or shape compatibility
   on json values.
 
@@ -1015,6 +1102,7 @@ WARNING [json-type-hole] entities.gln:12
 
 WARNING [json-type-hole] adapters.gln:8
   Adapter 'analytics', action 'track', input 'properties': type is 'json'.
+  Justification: "Event properties vary per event type — no fixed schema"
   Consider record({ event_name: string, user_id: uuid, timestamp: timestamp })
   if the event shape is predictable.
 ```
@@ -1036,6 +1124,7 @@ AND json_extract(usage.value, '$.component_id') NOT IN (
 Checks:
 
 **Component declarations:**
+
 - Source file path exists (warning if missing)
 - Prop types are valid (including record type field validation and tagged enum references)
 - Event types are valid (including tagged enum references)
@@ -1043,6 +1132,7 @@ Checks:
 - Component name doesn't conflict with built-in layout primitives
 
 **Component usages in projections:**
+
 - Referenced component exists
 - All `@required` props are provided
 - Prop value types match declared types — **including full record shape validation**
@@ -1051,6 +1141,7 @@ Checks:
 - Component is used in a valid layout position
 
 **Render compute usages:**
+
 - Referenced compute module exists
 - Module declares `output markup : render(<format>)`
 - Input params match module signature (including record types)
@@ -1058,6 +1149,7 @@ Checks:
 - If `render(raw)` is used, emit a warning
 
 Errors:
+
 ```
 ERROR [component-missing-required] projections.gln:45
   Projection 'task_board', component 'drag_drop_list':
@@ -1122,12 +1214,14 @@ WHERE b.type = 'behavior';
 Checks:
 
 **Adapter declarations:**
+
 - Config values referencing `env()` use valid environment variable names (warning level)
 - Action input/output types are valid (including tagged enum references)
 - No duplicate action names within an adapter
 - No duplicate input/output names within an action
 
 **Adapter calls in behaviors:**
+
 - Referenced adapter exists
 - Referenced action exists on that adapter
 - Parameter names match the action's declared inputs
@@ -1136,6 +1230,7 @@ Checks:
 - Adapter calls appear AFTER preconditions and compute steps, BEFORE mutations (structural validation of behavior phase ordering)
 
 Errors:
+
 ```
 ERROR [adapter-missing-action] behaviors.gln:42
   Behavior 'place_order', adapter call 'stripe_payments.charge':
@@ -1147,7 +1242,7 @@ ERROR [adapter-param-type] behaviors.gln:44
   Behavior 'place_order', adapter call 'stripe_payments.create_charge':
   Param 'amount' expects type 'integer', but received 'decimal'
   from 'total_result.total'.
-  
+
   Stripe expects amounts in cents (integer). You may need a compute
   module to convert: dollars_to_cents(amount: total_result.total)
 
@@ -1163,6 +1258,7 @@ ERROR [adapter-output-field] behaviors.gln:48
 After all 10 passes complete, the type checker produces an impurity audit. The audit generates no errors or warnings — it's a structured summary of where the type system's guarantees weaken. It prints on every build, passing or failing.
 
 **Console output format:**
+
 ```
 ─── Impurity Audit ───────────────────────────────────────
 
@@ -1181,7 +1277,8 @@ Components:    4 total (all opaque by definition)
   chart, data_table, drag_drop_list, rich_text_editor
 
 json holes:    1
-  analytics.track.properties  → consider record({ event_name: string, user_id: uuid })
+  analytics.track.properties  "Event properties vary per event type — no fixed schema"
+    → consider record({ event_name: string, user_id: uuid })
 
 Render safety: 3 directives │ 2 sanitized │ 1 raw
   ✗ custom_template (raw) in content_page
@@ -1237,7 +1334,7 @@ interface ImpurityAudit {
     raw_details: Array<{ compute_module: string; projection: string }>;
   };
   pure_coverage: {
-    percentage: number;  // (pure behaviors + projections + listeners) / total
+    percentage: number; // (pure behaviors + projections + listeners) / total
     pure: number;
     total: number;
   };
@@ -1253,10 +1350,10 @@ Errors are structured for both human and AI consumption:
 ```typescript
 interface TypeCheckError {
   // Severity
-  level: 'error' | 'warning' | 'info';
+  level: "error" | "warning" | "info";
 
   // Error code for categorization
-  code: string;  // e.g., 'behavior-compute-param-mismatch'
+  code: string; // e.g., 'behavior-compute-param-mismatch'
 
   // Location
   source_file: string;
@@ -1270,7 +1367,7 @@ interface TypeCheckError {
   // Full context
   expected: string;
   received: string;
-  path: string;  // e.g., "projection:profile_edit → action:update_email_btn → send:email → behavior:update_email → input:new_email"
+  path: string; // e.g., "projection:profile_edit → action:update_email_btn → send:email → behavior:update_email → input:new_email"
 
   // Fix suggestions
   suggestions: string[];
@@ -1285,6 +1382,7 @@ interface TypeCheckError {
 ```
 
 **Console output format:**
+
 ```
 ✗ Build failed: 3 errors, 2 warnings
 
@@ -1329,6 +1427,7 @@ WARNING [json-type-hole] adapters.gln:8
 ```
 
 **Additional warning codes** for impurity tracking:
+
 - `json-type-hole` (warning) — a field, parameter, or output uses the `json` type, bypassing structural type checking
 - `adapter-output-unverified` (info) — an adapter action's declared output types cannot be verified at build time; runtime validation will check them
 
@@ -1344,8 +1443,8 @@ Returns a `TypeCheckResult` object wrapping both errors and the impurity audit:
 
 ```typescript
 interface TypeCheckResult {
-  errors: TypeCheckError[];     // all errors, warnings, and info messages
-  audit: ImpurityAudit;         // impurity summary (see above)
+  errors: TypeCheckError[]; // all errors, warnings, and info messages
+  audit: ImpurityAudit; // impurity summary (see above)
 }
 ```
 
@@ -1367,13 +1466,16 @@ graphlang check ./app/behaviors.gln
 ```
 
 This means the AI development loop is:
-1. AI generates/modifies `.gln` files
-2. Run `graphlang check`
-3. AI reads errors, makes fixes
-4. Repeat until clean
-5. Run `graphlang build` to compile and serve
 
-Steps 1-4 are fast (no compilation, no runtime startup). The type checker is the inner loop — it must be fast and its errors must be good enough for the AI to converge.
+1. AI generates/modifies `.gln` files
+2. Run `graphlang sync` → generates contracts, creates/rewrites implementation stubs
+3. AI fills in implementation bodies (referencing `.graphlang/gen/contracts.gen.ts`)
+4. Run `graphlang check` → read-only validation (type check + contract check)
+5. AI reads errors, makes fixes
+6. Repeat until clean
+7. Run `graphlang build` to compile and serve
+
+Steps 1-6 are fast (no compilation, no runtime startup). The type checker is the inner loop — it must be fast and its errors must be good enough for the AI to converge. `sync` ensures implementations stay aligned with the graph automatically, so the AI never has to fix signature drift manually.
 
 ---
 
@@ -1384,6 +1486,8 @@ Steps 1-4 are fast (no compilation, no runtime startup). The type checker is the
 - **Flat structure.** Every node and edge is a top-level declaration. No nesting hierarchies.
 - **One declaration per file.** Each `.gln` file contains exactly one top-level declaration (one entity, one behavior, one projection, etc.). Filename is the snake_case form of the node name (e.g., `order.gln`, `place_order.gln`, `order_status.gln`). This keeps git diffs surgical — a single-field rename touches one file — and maximizes watch mode efficiency, since the dependency map is file → nodes → passes. No imports, no module system, no file-linking mechanism. The tooling recursively scans all `.gln` files in the project tree.
 - **Directory-structure-agnostic.** `graphlang check` processes every `.gln` file it finds regardless of directory layout. The node type is declared in the file content (`entity Order`, `behavior place_order`) — directory names add no information the tooling needs. Teams can organize by node type, by feature, or not at all. The spec does not prescribe a convention because the primary author is AI, which loads entire project context and doesn't navigate directories.
+- **Graph-as-source-of-truth.** The `.gln` graph is the authoritative program. TypeScript implementations behind compute modules, adapters, and components are managed artifacts — the toolchain generates their type contracts, creates stubs, and rewrites signatures when the graph changes. This eliminates split-brain drift between graph declarations and TS implementations.
+- **Deterministic correction paths.** Every error the type checker or contract checker produces has exactly one fix. The AI never has to choose between "fix the graph" or "fix the TS" — the graph wins, and the toolchain adjusts the TS to match.
 - **One statement per line.** Trivial for AI to emit, trivial to diff in git.
 - **Explicit edges.** Every relationship is declared, never implicit.
 - **Typed everything.** Node types, field types, edge types — all explicit.
@@ -1491,6 +1595,7 @@ end
 ```
 
 **Rules:**
+
 - Variant names use PascalCase (convention, not enforced)
 - Each enum must have at least two variants
 - Variant field types follow the same rules as entity fields — including references to other enums and entities
@@ -1517,6 +1622,7 @@ end
 The inline `enum(val1, val2, ...)` syntax remains unchanged for simple restricted-value fields. Use top-level `enum Name ... end` when variants need to carry data.
 
 **Supported field types:**
+
 - `string` — short text, supports `@min(n)`, `@max(n)`, `@format(email|url|phone)`
 - `text` — long text, no length limits
 - `integer` — whole numbers, supports `@min(n)`, `@max(n)`
@@ -1528,9 +1634,10 @@ The inline `enum(val1, val2, ...)` syntax remains unchanged for simple restricte
 - `<EnumName>` — reference to a declared enum (tagged union). Values carry a `variant` discriminant and variant-specific fields.
 - `record({ field: type, ... })` — inline structured type with named, typed fields. Enables full type checking through component props, adapter actions, and behavior inputs without resorting to `json`.
 - `list(T)` — ordered collection of any type T, including `list(record({...}))` for typed collections
-- `json` — arbitrary JSON blob. **Escape hatch — use sparingly.** Every `json` usage is a hole in the type system where the checker can't validate field access. Prefer `record({...})` when the shape is known.
+- `json` — arbitrary JSON blob. **Escape hatch — use sparingly.** Every `json` usage is a hole in the type system where the checker can't validate field access. Prefer `record({...})` when the shape is known. **Requires `@justification("reason")` annotation** — the type checker errors if a `json`-typed field, parameter, or output lacks a justification. The justification text appears in the impurity audit.
 
 **Record type examples:**
+
 ```
 # Typed cart items instead of list(json)
 field items : list(record({
@@ -1559,6 +1666,7 @@ field columns : list(record({
 The type checker validates record field access throughout the graph. When a behavior accesses `$item.unit_price`, the checker verifies that the record includes `unit_price` of type `decimal`. When a component prop expects `list(record({ field: string, label: string }))`, the checker verifies the binding provides that exact shape. This eliminates the class of runtime errors where AI generates code that accesses fields that don't exist on the object.
 
 **Supported field annotations:**
+
 - `@required` — field cannot be null
 - `@unique` — value must be unique across all instances
 - `@generated` — runtime sets this, not user input (type checker prevents mutation)
@@ -1567,6 +1675,7 @@ The type checker validates record field access throughout the graph. When a beha
 - `@format(type)` — format validation (type checker propagates format to bindings)
 - `@min(n)` / `@max(n)` — range constraints (type checker verifies on numeric/string types only)
 - `@immutable` — cannot be changed after creation (type checker prevents mutation in behaviors)
+- `@justification("reason")` — required on any field, parameter, or output typed as `json`. Explains why a typed alternative isn't used. Text appears in the impurity audit. Example: `field metadata : json @justification("Event properties vary per event type — no fixed schema")`
 
 #### Relationship Edges
 
@@ -1591,6 +1700,7 @@ end
 **Edge cardinalities:** `has_one`, `has_many`, `belongs_to`, `many_to_many`
 
 **Edge properties:**
+
 - `on_delete cascade|nullify|restrict|deny`
 - `required true|false`
 - `inverse <edge_name>`
@@ -1599,17 +1709,17 @@ end
 
 Declare compute modules with typed signatures. Implementation lives in `.ts` files (pure TypeScript functions). The type checker validates that every reference to a compute module matches its declared signature.
 
+The `source` field is **optional**. By default, the toolchain looks for the implementation at `impl/compute/<id>.ts` (derived from the compute module's ID). If a `source` field is present, it overrides the path but must stay within `impl/`. The toolchain resolves and tracks the mapping in `.graphlang/manifest.json`.
+
 ```
 compute hash_password
   description "Hash a plaintext password"
-  source "impl/compute/hash_password.ts"
   input plaintext : string
   output hashed : string
 end
 
 compute verify_password
   description "Verify plaintext against hash"
-  source "impl/compute/verify_password.ts"
   input plaintext : string
   input hash : string
   output valid : boolean
@@ -1617,7 +1727,6 @@ end
 
 compute calculate_order_total
   description "Sum line items"
-  source "impl/compute/calculate_order_total.ts"
   input items : list(record({
     unit_price : decimal,
     quantity : integer
@@ -1627,7 +1736,6 @@ end
 
 compute calculate_discount
   description "Apply loyalty tier discount"
-  source "impl/compute/calculate_discount.ts"
   input subtotal : decimal
   input tier : string
   output final_total : decimal
@@ -1636,7 +1744,6 @@ end
 
 compute validate_password_strength
   description "Check password strength requirements"
-  source "impl/compute/validate_password_strength.ts"
   input password : string
   output valid : boolean
   output reason : string
@@ -1644,10 +1751,20 @@ end
 
 compute format_currency
   description "Format decimal as currency string"
-  source "impl/compute/format_currency.ts"
   input amount : decimal
   input currency : string
   output formatted : string
+end
+```
+
+Explicit `source` override example (non-canonical path):
+
+```
+compute legacy_hash
+  description "Legacy hash for migration compatibility"
+  source "impl/compute/compat/legacy_hash.ts"
+  input plaintext : string
+  output hashed : string
 end
 ```
 
@@ -1973,6 +2090,7 @@ end
 ```
 
 **Special variables:**
+
 - `$input` — the input data from the trigger
 - `$target` or `$target_<entity>` — the entity being operated on
 - `$auth` — authentication context (`$auth.user`, `$auth.session`)
@@ -2148,6 +2266,7 @@ end
 ##### Projection Layout Primitives
 
 **Container types:**
+
 - `page` — root. Props: `max_width(narrow|medium|wide|full)`, `padding(none|tight|comfortable|spacious)`
 - `section` — grouping. Props: `id()`, `visible_when <condition>`
 - `card` — elevated container
@@ -2156,15 +2275,18 @@ end
 - `form` — form container. Props: `id()`, `target(<entity_binding>)`
 
 **Content types:**
+
 - `heading` — Props: `level(1-6)`, text content
 - `text` — inline text. Props: `style(bold|italic|muted|error|success)`
 - `divider` — horizontal rule
 - `image` — Props: `src(<binding>)`, `alt(text)`
 
 **Input types:**
+
 - `field` — form input. Props: `id()`, `type(text|email|password|number|textarea|select|checkbox|date)`, `label()`, `placeholder()`, `required`, `validate`, `error_message`, `options()`, `bind_value <state_var>`, `debounce <duration>`
 
 **Interactive types:**
+
 - `action` — button. Props: `id()`, `label()`, `style(primary|secondary|danger|link)`, `enabled_when`, `visible_when`, `submit_to behavior()`, `send <key> = <value>`
 - `link` — navigation. Props: `to(<route>)`, `label()`
 - `option` — selectable item within a list
@@ -2172,6 +2294,7 @@ end
 **Iteration:** `each <binding> as <item>`
 
 **Reactive modifiers:**
+
 - `visible_when <condition>` — show/hide
 - `enabled_when <condition>` — enable/disable
 - `bind_value <state_var>` — two-way binding
@@ -2180,12 +2303,14 @@ end
 - `delay(<duration>)` — delay execution
 
 **State mutations (inside handlers):**
+
 - `set $state.x = <value>`
 - `toggle $state.x`
 - `append $state.list = <value>`
 - `remove $state.list where <condition>`
 
 **Derived values:**
+
 - `<n> = <expression>` — re-evaluates when deps change
 - `<n> = compute(<module>, params)` — computed via TypeScript function
 - `<n> = query(Entity, ...) when <condition>` — reactive server query
@@ -2365,6 +2490,7 @@ end
 ```
 
 The type checker validates:
+
 - Every variant name in a `when` branch exists on the matched enum
 - Destructured names match the variant's declared field names exactly
 - Destructured bindings are scoped to the branch and typed according to the variant's field types
@@ -2412,29 +2538,30 @@ For client-state matches, the compiler generates:
 function renderViewModeMatch(container) {
   unmountCurrentBranch(container);
   switch (state.view_mode) {
-    case 'grid':
+    case "grid":
       container.innerHTML = renderBranch_grid();
       initBranch_grid(container);
       break;
-    case 'list':
+    case "list":
       container.innerHTML = renderBranch_list();
       initBranch_list(container);
       break;
   }
 }
 
-watch('view_mode', () => renderViewModeMatch(viewModeContainer));
+watch("view_mode", () => renderViewModeMatch(viewModeContainer));
 ```
 
 Each branch has its own render function and init function (which attaches event listeners, mounts components, etc.). When the match expression changes, the current branch is unmounted and the new branch is mounted.
 
 ##### Presentation & Transitions
 
-The graph declares *when* things change. CSS declares *how* they look and animate. The graph never references colors, fonts, transitions, or animations.
+The graph declares _when_ things change. CSS declares _how_ they look and animate. The graph never references colors, fonts, transitions, or animations.
 
 The compiler generates predictable `data-gl-*` attributes on every element based on its graph identity and current state. CSS targets these attributes for all visual styling, including transitions and animations. See the **Styling** section (section 4, "Styling (CSS Source Files)") for the full data attribute reference and example CSS.
 
 **What the graph controls:**
+
 - `visible_when` — compiler toggles `data-gl-visible` between `true` and `false`
 - `enabled_when` — compiler toggles `data-gl-enabled`
 - `match` — compiler sets `data-gl-match` to the current branch value, adds `data-gl-match-enter` and `data-gl-match-exit` during transitions
@@ -2442,6 +2569,7 @@ The compiler generates predictable `data-gl-*` attributes on every element based
 - `style(primary)`, `style(bold)`, etc. — compiler generates `data-gl-action-style="primary"`, `data-gl-text-style="bold"`
 
 **What CSS controls:**
+
 - Whether `data-gl-visible="false"` means `display: none`, an opacity fade, a slide animation, or a 3D transform
 - Whether match branch swaps are instant or animated
 - Whether list item additions fade in, slide in, or appear instantly
@@ -2468,19 +2596,19 @@ end
 
 The type checker validates that the key field exists on the item type. For the prototype, the compiler re-renders the entire list via innerHTML when the data changes. Keyed DOM diffing with enter/exit/move detection is a future optimization — when implemented, the compiler will add `data-gl-enter` and `data-gl-exit` attributes on affected items for CSS to animate.
 
-
 ##### UI Extensibility
 
 The built-in layout primitives cover common patterns. For everything else, GraphLang provides two extensibility mechanisms — both with typed boundaries.
 
 **1. Components — Typed UI Extension Points**
 
-A component is a reusable UI element with typed props flowing in and typed events flowing out. The implementation is opaque JavaScript with a mount/update/unmount contract. The graph declares the typed interface; the JS file handles rendering and interaction. Whether you're embedding a one-off drag-and-drop list or a reusable chart used across ten projections, it's the same concept: a component declaration with typed props and events.
+A component is a reusable UI element with typed props flowing in and typed events flowing out. The implementation is opaque TypeScript with a mount/update/unmount contract. The graph declares the typed interface; the TS file handles rendering and interaction. Whether you're embedding a one-off drag-and-drop list or a reusable chart used across ten projections, it's the same concept: a component declaration with typed props and events.
+
+The `source` field is **optional**. By default, the toolchain looks for the implementation at `impl/components/<id>.ts` (derived from the component's ID). If a `source` field is present, it overrides the path but must stay within `impl/`. The toolchain resolves and tracks the mapping in `.graphlang/manifest.json`.
 
 ```
 component drag_drop_list
   description "Reorderable list with drag and drop"
-  source "impl/components/drag_drop_list.ts"
 
   prop items : list(record({
     id : uuid,
@@ -2498,7 +2626,6 @@ end
 
 component chart
   description "Data visualization chart"
-  source "impl/components/chart.ts"
 
   prop data : list(record({
     label : string,
@@ -2512,7 +2639,6 @@ end
 
 component rich_text_editor
   description "WYSIWYG rich text editor"
-  source "impl/components/rich_text_editor.ts"
 
   prop content : text
   prop placeholder : string
@@ -2525,7 +2651,6 @@ end
 
 component data_table
   description "Sortable, filterable data table"
-  source "impl/components/data_table.ts"
 
   prop data : list(record({
     id : uuid
@@ -2539,6 +2664,16 @@ component data_table
 
   event on_row_click : record({ id : uuid })
   event on_sort : record({ field : string, direction : enum(asc, desc) })
+end
+```
+
+Explicit `source` override example:
+
+```
+component legacy_chart
+  description "Legacy charting component"
+  source "impl/components/vendor/legacy_chart.ts"
+  prop data : list(record({ label : string, value : decimal })) @required
 end
 ```
 
@@ -2618,6 +2753,7 @@ end
 ```
 
 The type checker validates:
+
 - The component exists (is declared)
 - All `@required` props are provided
 - Prop value types match declared types — **including record field shapes**
@@ -2625,25 +2761,34 @@ The type checker validates:
 - `$event` type matches the component's declared event type
 - Component name doesn't conflict with built-in layout primitives
 
-**Component JS implementation contract:**
+**Component TS implementation contract:**
 
-```javascript
-// components/chart.js
-// All components follow the same lifecycle contract.
+Component implementations use canonical naming: `mount_<id>`, `update_<id>`, `unmount_<id>`. Props are typed via generated contracts.
 
-export function mount(element, props, emit) {
+```typescript
+// impl/components/chart.ts
+import type { Component_chart_Props } from "../../.graphlang/gen/contracts.gen";
+
+export function mount_chart(
+  element: HTMLElement,
+  props: Component_chart_Props,
+  emit: EmitFn,
+) {
   // element: DOM node to render into
   // props: typed data matching declared prop types
   // emit: function to fire typed events — emit('on_row_click', { id: '...' })
   // Full DOM control within the element.
 }
 
-export function update(element, props) {
+export function update_chart(
+  element: HTMLElement,
+  props: Component_chart_Props,
+) {
   // Called when bound prop values change (state updates, data refreshes).
   // Efficient diffing is the component's responsibility.
 }
 
-export function unmount(element) {
+export function unmount_chart(element: HTMLElement) {
   // Cleanup: remove event listeners, cancel timers, etc.
   // Called when the projection navigates away or the component's
   // visible_when condition becomes false.
@@ -2657,7 +2802,6 @@ A compute module can declare a `render(<format>)` output type, meaning it return
 ```
 compute sales_sparkline
   description "Generate an inline SVG sparkline from sales data"
-  source "impl/compute/sales_sparkline.ts"
   input data : list(record({ month : string, total : decimal }))
   input width : integer
   input height : integer
@@ -2666,14 +2810,12 @@ end
 
 compute markdown_to_html
   description "Convert markdown text to safe HTML"
-  source "impl/compute/markdown_to_html.ts"
   input source : text
   output markup : render(html_safe)
 end
 
 compute syntax_highlight
   description "Syntax-highlight a code block"
-  source "impl/compute/syntax_highlight.ts"
   input code : text
   input language : string
   output markup : render(html_safe)
@@ -2681,6 +2823,7 @@ end
 ```
 
 **Render format types:**
+
 - `render(svg)` — sanitizer allows SVG elements and attributes only. No `<script>`, no event handlers, no foreign object.
 - `render(html_safe)` — sanitizer allows a safe subset of HTML: text formatting, links, lists, tables, code blocks. No `<script>`, no `<iframe>`, no `on*` attributes.
 - `render(raw)` — no sanitization. **Use only for trusted content.** Type checker emits a warning when `render(raw)` is used.
@@ -2707,6 +2850,7 @@ end
 ```
 
 The type checker validates:
+
 - The compute module exists and declares a `render(...)` output
 - Input param names and types match
 - The `render` directive is used in a valid layout position
@@ -2714,11 +2858,11 @@ The type checker validates:
 
 **Extensibility Summary**
 
-| Mechanism | Use Case | Type Safety | Implementation |
-|-----------|----------|-------------|----------------|
-| Components | Any custom UI: charts, drag-drop, editors, maps | Typed props + events (including record shapes) | JS with mount/update/unmount |
-| Render compute | Computed markup: sparklines, markdown, syntax highlighting | Typed inputs, format-specific sanitization | TypeScript returning HTML/SVG string |
-| Typed adapters | External services: Stripe, email, analytics | Typed action inputs + outputs | Runtime handles HTTP/protocol |
+| Mechanism      | Use Case                                                   | Type Safety                                    | Implementation                       |
+| -------------- | ---------------------------------------------------------- | ---------------------------------------------- | ------------------------------------ |
+| Components     | Any custom UI: charts, drag-drop, editors, maps            | Typed props + events (including record shapes) | JS with mount/update/unmount         |
+| Render compute | Computed markup: sparklines, markdown, syntax highlighting | Typed inputs, format-specific sanitization     | TypeScript returning HTML/SVG string |
+| Typed adapters | External services: Stripe, email, analytics                | Typed action inputs + outputs                  | Runtime handles HTTP/protocol        |
 
 The unifying principle across all three: **the graph never tries to express the internals.** It only expresses the typed contract at the boundary.
 
@@ -2736,6 +2880,8 @@ end
 
 Adapters bridge to external systems with **typed action contracts**. Each action declares typed inputs and outputs so behaviors can call them with full type checking — the same way they call compute modules. The adapter owns the implementation (HTTP calls, SDK usage); the graph owns the contract.
 
+Adapters gain implementation files at `impl/adapters/<id>.ts`. The toolchain generates stubs with the canonical adapter executor pattern based on the adapter's `type` (http, smtp, etc.). No `source` field is needed — the adapter's `type` determines the executor pattern.
+
 ```
 adapter email_sender
   description "Send transactional emails via SMTP"
@@ -2751,7 +2897,7 @@ adapter email_sender
     input to : string @format(email)
     input subject : string
     input template : string
-    input data : json
+    input data : json @justification("Email template data varies per template — no fixed schema")
     output message_id : string
     output status : enum(sent, queued, failed)
   end
@@ -2793,7 +2939,7 @@ adapter analytics
 
   action track
     input event_name : string
-    input properties : json  # Intentionally json — event properties vary per event type and are freeform by nature
+    input properties : json @justification("Event properties vary per event type — no fixed schema")
     output accepted : boolean
   end
 end
@@ -2819,6 +2965,7 @@ end
 ```
 
 The type checker validates:
+
 - The adapter exists
 - The action exists on that adapter
 - Parameter names match the action's declared inputs
@@ -2826,6 +2973,7 @@ The type checker validates:
 - When result fields are accessed, they match the action's declared outputs
 
 **Key rules:**
+
 - Adapters are the only nodes that perform external I/O
 - Adapter calls in behaviors happen AFTER preconditions, BEFORE mutations (so a failed payment doesn't leave orphaned data)
 - Adapter calls are NOT inside the mutation transaction — they're a separate phase
@@ -2839,26 +2987,27 @@ GraphLang does not have a styling DSL. All visual presentation — colors, typog
 
 ```html
 <!-- Generated from projection: storefront, section: cart_section -->
-<section data-gl-projection="storefront"
-         data-gl-node="cart_section"
-         data-gl-visible="true"
-         data-gl-type="section">
-
-<!-- Generated from action with style(primary) -->
-<button data-gl-type="action"
-        data-gl-action-style="primary"
-        data-gl-enabled="true">
-
-<!-- Generated from text with style(bold) -->
-<span data-gl-type="text"
-      data-gl-text-style="bold">
-
-<!-- Generated from match on order.status, current branch: shipped -->
-<div data-gl-type="match"
-     data-gl-match="shipped">
-
-<!-- Generated from each block -->
-<div data-gl-type="each-item">
+<section
+  data-gl-projection="storefront"
+  data-gl-node="cart_section"
+  data-gl-visible="true"
+  data-gl-type="section"
+>
+  <!-- Generated from action with style(primary) -->
+  <button
+    data-gl-type="action"
+    data-gl-action-style="primary"
+    data-gl-enabled="true"
+  >
+    <!-- Generated from text with style(bold) -->
+    <span data-gl-type="text" data-gl-text-style="bold">
+      <!-- Generated from match on order.status, current branch: shipped -->
+      <div data-gl-type="match" data-gl-match="shipped">
+        <!-- Generated from each block -->
+        <div data-gl-type="each-item"></div></div
+    ></span>
+  </button>
+</section>
 ```
 
 **CSS targets these attributes:**
@@ -2901,8 +3050,12 @@ GraphLang does not have a styling DSL. All visual presentation — colors, typog
 }
 
 /* Match branch transitions */
-[data-gl-match-exit] { animation: fadeOut 150ms ease-out forwards; }
-[data-gl-match-enter] { animation: fadeIn 200ms ease-in; }
+[data-gl-match-exit] {
+  animation: fadeOut 150ms ease-out forwards;
+}
+[data-gl-match-enter] {
+  animation: fadeIn 200ms ease-in;
+}
 
 /* List item enter/exit */
 /* Future: when keyed list diffing is implemented, these will fire on item enter/exit */
@@ -2911,22 +3064,45 @@ GraphLang does not have a styling DSL. All visual presentation — colors, typog
 
 /* Design tokens */
 :root {
-  --color-primary: #6366F1;
-  --color-secondary: #8B5CF6;
-  --color-danger: #EF4444;
-  --color-success: #22C55E;
-  --color-background: #FFFFFF;
-  --color-surface: #F8FAFC;
-  --color-border: #E2E8F0;
-  --color-text: #0F172A;
-  --color-text-muted: #64748B;
+  --color-primary: #6366f1;
+  --color-secondary: #8b5cf6;
+  --color-danger: #ef4444;
+  --color-success: #22c55e;
+  --color-background: #ffffff;
+  --color-surface: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
   --spacing: 8px;
   --radius: 8px;
 }
 
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-@keyframes slideIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes slideIn {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
 ```
 
 **PostCSS lint pass (optional):**
@@ -2950,11 +3126,14 @@ This is a warning, not an error. Broken CSS selectors don't break functionality 
 
 Compute modules are pure TypeScript functions. The same code runs on the server (Node.js) and in the browser (bundled into client JS). No compilation step beyond standard `tsc`. No marshaling. No special runtime.
 
+Implementations are **toolchain-managed, AI-authored artifacts**. The graph is the source of truth. The toolchain generates type contracts (`.graphlang/gen/contracts.gen.ts`), creates implementation stubs, and maintains function signatures. AI fills in function bodies; signatures are owned by the toolchain.
+
 - **Direct function calls.** No serialization, no memory management, no loader. Import and call.
 - **AI writes it reliably.** TypeScript is the language AI knows best. No dialects, no subsets.
 - **Native record types.** Typed objects pass directly — no JSON serialization round-trips.
 - **Two layers of type checking.** GraphLang's type checker validates the graph wiring. TypeScript's type checker validates the function implementation. Both must pass.
 - **Same code, both runtimes.** The server imports the function directly. The client bundler includes it in the generated JS. No "compile once, deploy everywhere" complexity — it's just JavaScript.
+- **Generated contracts.** Implementations import their input/output types from `.graphlang/gen/contracts.gen.ts`. The toolchain creates stubs and maintains signatures — AI only needs to write function bodies.
 
 ### 5.2 Compute Module Rules
 
@@ -2968,89 +3147,158 @@ Compute modules must be **pure functions** — no side effects, no external stat
 
 Violations are build errors, not warnings.
 
+**Single-object-arg calling convention:** Every compute module exports exactly one function with a canonical name and signature:
+
+- Function name: `compute_<id>` (e.g., `compute_verify_password`)
+- Input type: `Compute_<id>_Input` (imported from `.graphlang/gen/contracts.gen.ts`)
+- Output type: `Compute_<id>_Output` (imported from `.graphlang/gen/contracts.gen.ts`)
+- The function takes a single input object and returns a single output object
+- The `compute_` prefix avoids collisions with other symbols and keeps functions grepable
+- Function names are mechanically derived from node IDs — no creativity, no drift
+
 **Compute modules and impurity:** Because compute modules are lint-enforced pure functions (no I/O, no side effects, no non-determinism), they never contribute to impurity in the type checker's impurity tracking. The four impurity sources — adapter calls, components, `render(raw)`, and `json` type — are all outside the compute layer. A behavior's compute steps don't affect its `ImpurityInfo`; only its adapter calls and `render(raw)` usage do. This is by design: the compute layer is the provably pure core of every GraphLang application.
 
 ### 5.3 Example Compute Modules
 
-#### compute/hash_password.ts
+All compute modules follow the single-object-arg convention: import types from `.graphlang/gen/contracts.gen`, export `compute_<id>` with typed input/output.
+
+#### impl/compute/hash_password.ts
+
 ```typescript
 // Prototype-quality hash — replace with bcrypt adapter for production
-export function hash_password(plaintext: string): { hashed: string } {
+import type {
+  Compute_hash_password_Input,
+  Compute_hash_password_Output,
+} from "../../.graphlang/gen/contracts.gen";
+
+export function compute_hash_password(
+  input: Compute_hash_password_Input,
+): Compute_hash_password_Output {
   let hash = 5381;
-  for (let i = 0; i < plaintext.length; i++) {
-    hash = ((hash << 5) + hash) + plaintext.charCodeAt(i);
+  for (let i = 0; i < input.plaintext.length; i++) {
+    hash = (hash << 5) + hash + input.plaintext.charCodeAt(i);
   }
   return { hashed: "hashed_" + hash.toString() };
 }
 ```
 
-#### compute/verify_password.ts
+#### impl/compute/verify_password.ts
+
 ```typescript
-export function verify_password(plaintext: string, hash: string): { valid: boolean } {
+import type {
+  Compute_verify_password_Input,
+  Compute_verify_password_Output,
+} from "../../.graphlang/gen/contracts.gen";
+
+export function compute_verify_password(
+  input: Compute_verify_password_Input,
+): Compute_verify_password_Output {
   let computed = 5381;
-  for (let i = 0; i < plaintext.length; i++) {
-    computed = ((computed << 5) + computed) + plaintext.charCodeAt(i);
+  for (let i = 0; i < input.plaintext.length; i++) {
+    computed = (computed << 5) + computed + input.plaintext.charCodeAt(i);
   }
-  return { valid: hash === "hashed_" + computed.toString() };
+  return { valid: input.hash === "hashed_" + computed.toString() };
 }
 ```
 
-#### compute/calculate_order_total.ts
-```typescript
-interface LineItem {
-  unit_price: number;
-  quantity: number;
-}
+#### impl/compute/calculate_order_total.ts
 
-export function calculate_order_total(items: LineItem[]): { total: number } {
-  const total = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+```typescript
+import type {
+  Compute_calculate_order_total_Input,
+  Compute_calculate_order_total_Output,
+} from "../../.graphlang/gen/contracts.gen";
+
+export function compute_calculate_order_total(
+  input: Compute_calculate_order_total_Input,
+): Compute_calculate_order_total_Output {
+  const total = input.items.reduce(
+    (sum, item) => sum + item.unit_price * item.quantity,
+    0,
+  );
   return { total: Math.round(total * 100) / 100 };
 }
 ```
 
-#### compute/calculate_discount.ts
+#### impl/compute/calculate_discount.ts
+
 ```typescript
-export function calculate_discount(subtotal: number, tier: string): { final_total: number; discount_amount: number } {
+import type {
+  Compute_calculate_discount_Input,
+  Compute_calculate_discount_Output,
+} from "../../.graphlang/gen/contracts.gen";
+
+export function compute_calculate_discount(
+  input: Compute_calculate_discount_Input,
+): Compute_calculate_discount_Output {
   let rate = 0;
-  if (tier === "gold") rate = 0.20;
-  else if (tier === "silver") rate = 0.10;
-  const discount_amount = Math.round(subtotal * rate * 100) / 100;
-  return { final_total: subtotal - discount_amount, discount_amount };
+  if (input.tier === "gold") rate = 0.2;
+  else if (input.tier === "silver") rate = 0.1;
+  const discount_amount = Math.round(input.subtotal * rate * 100) / 100;
+  return { final_total: input.subtotal - discount_amount, discount_amount };
 }
 ```
 
-#### compute/validate_password_strength.ts
+#### impl/compute/validate_password_strength.ts
+
 ```typescript
-export function validate_password_strength(password: string): { valid: boolean; reason: string } {
-  if (password.length < 8) return { valid: false, reason: "Must be at least 8 characters" };
-  if (!/[A-Z]/.test(password)) return { valid: false, reason: "Must contain an uppercase letter" };
-  if (!/[0-9]/.test(password)) return { valid: false, reason: "Must contain a digit" };
+import type {
+  Compute_validate_password_strength_Input,
+  Compute_validate_password_strength_Output,
+} from "../../.graphlang/gen/contracts.gen";
+
+export function compute_validate_password_strength(
+  input: Compute_validate_password_strength_Input,
+): Compute_validate_password_strength_Output {
+  if (input.password.length < 8)
+    return { valid: false, reason: "Must be at least 8 characters" };
+  if (!/[A-Z]/.test(input.password))
+    return { valid: false, reason: "Must contain an uppercase letter" };
+  if (!/[0-9]/.test(input.password))
+    return { valid: false, reason: "Must contain a digit" };
   return { valid: true, reason: "" };
 }
 ```
 
-#### compute/format_currency.ts
+#### impl/compute/format_currency.ts
+
 ```typescript
-export function format_currency(amount: number, currency: string): { formatted: string } {
+import type {
+  Compute_format_currency_Input,
+  Compute_format_currency_Output,
+} from "../../.graphlang/gen/contracts.gen";
+
+export function compute_format_currency(
+  input: Compute_format_currency_Input,
+): Compute_format_currency_Output {
   const symbols: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
-  const symbol = symbols[currency] || currency + " ";
-  return { formatted: symbol + amount.toFixed(2) };
+  const symbol = symbols[input.currency] || input.currency + " ";
+  return { formatted: symbol + input.amount.toFixed(2) };
 }
 ```
 
-#### compute/markdown_to_html.ts
+#### impl/compute/markdown_to_html.ts
+
 ```typescript
 // Render compute — returns markup string
-export function markdown_to_html(source: string): { markup: string } {
+import type {
+  Compute_markdown_to_html_Input,
+  Compute_markdown_to_html_Output,
+} from "../../.graphlang/gen/contracts.gen";
+
+export function compute_markdown_to_html(
+  input: Compute_markdown_to_html_Input,
+): Compute_markdown_to_html_Output {
   // Simple markdown conversion — replace with a proper library for production
-  let html = source
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/^/, '<p>').replace(/$/, '</p>');
+  let html = input.source
+    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/\n\n/g, "</p><p>")
+    .replace(/^/, "<p>")
+    .replace(/$/, "</p>");
   return { markup: html };
 }
 ```
@@ -3058,9 +3306,23 @@ export function markdown_to_html(source: string): { markup: string } {
 ### 5.4 Compute Module Loading
 
 ```typescript
+// Server: import via generated registry
+import { registry } from "./.graphlang/gen/registry.gen";
+const result = registry.compute.verify_password({
+  plaintext: "test",
+  hash: "hashed_123",
+});
+// result: { valid: false }
+```
+
+Or direct import still works:
+
+```typescript
 // Server: direct import
-import { validate_password_strength } from './compute/validate_password_strength';
-const result = validate_password_strength("MyPassword123");
+import { compute_validate_password_strength } from "./impl/compute/validate_password_strength";
+const result = compute_validate_password_strength({
+  password: "MyPassword123",
+});
 // result: { valid: true, reason: "" }
 
 // Client: bundled into generated JS by the compiler
@@ -3070,39 +3332,143 @@ const result = validate_password_strength("MyPassword123");
 
 No loader, no runtime, no marshaling. Functions are imported and called directly.
 
-### 5.5 Graph ↔ TypeScript Type Contract
+### 5.5 Generated Contract Surface
 
-The graph declares compute module signatures. The TypeScript files implement them. Both are validated:
+On every `graphlang sync` and `graphlang build`, the toolchain generates `.graphlang/gen/` from the graph:
 
-**Graph declaration (compute.gln):**
-```
-compute validate_password_strength
-  description "Check password strength requirements"
-  source "impl/compute/validate_password_strength.ts"
-  input password : string
-  output valid : boolean
-  output reason : string
-end
-```
+**`types.gen.ts`** — Entity record types and tagged enum discriminated unions:
 
-**TypeScript implementation (compute/validate_password_strength.ts):**
 ```typescript
-export function validate_password_strength(password: string): { valid: boolean; reason: string } {
-  // ...
+// Generated — DO NOT EDIT
+export interface Entity_User {
+  id: string;
+  email: string;
+  password_hash: string;
+  name: string;
+  role: "admin" | "customer";
+  created_at: string;
+  updated_at: string;
+}
+
+export type OrderStatus =
+  | { variant: "Pending" }
+  | { variant: "Confirmed" }
+  | { variant: "Shipped"; carrier: string; tracking_number: string }
+  | { variant: "Delivered"; delivered_at: string }
+  | { variant: "Cancelled"; reason: string; cancelled_at: string };
+```
+
+**`contracts.gen.ts`** — Canonical signatures for every compute module, adapter action, and component:
+
+```typescript
+// Generated — DO NOT EDIT
+// Compute: verify_password
+export interface Compute_verify_password_Input {
+  plaintext: string;
+  hash: string;
+}
+export interface Compute_verify_password_Output {
+  valid: boolean;
+}
+
+// Compute: calculate_order_total
+export interface Compute_calculate_order_total_Input {
+  items: Array<{ unit_price: number; quantity: number }>;
+}
+export interface Compute_calculate_order_total_Output {
+  total: number;
+}
+
+// Adapter: stripe_payments, action: create_charge
+export interface Adapter_stripe_payments__create_charge_Input {
+  amount: number;
+  currency: string;
+  token: string;
+  description: string;
+}
+export interface Adapter_stripe_payments__create_charge_Output {
+  charge_id: string;
+  status: "succeeded" | "pending" | "failed";
+  failure_reason: string;
+}
+
+// Component: chart
+export interface Component_chart_Props {
+  data: Array<{ label: string; value: number }>;
+  type: "bar" | "line" | "pie" | "area";
+  title?: string;
+  height?: number;
+  color_scheme?: "default" | "warm" | "cool" | "mono";
 }
 ```
 
-**GraphLang type checker validates:** Every behavior, constraint, and projection that references `validate_password_strength` passes the correct param names and types and accesses valid output fields.
+**`validators.gen.ts`** — Runtime validators for adapter outputs and component events:
 
-**TypeScript compiler validates:** The function signature matches — input params are the right types, return type has the right fields. TypeScript catches implementation bugs (wrong variable types, missing returns, etc.).
+```typescript
+// Generated — DO NOT EDIT
+export function validate_stripe_payments__create_charge_output(
+  data: unknown,
+): Adapter_stripe_payments__create_charge_Output {
+  // Validates shape, types, required fields
+  // Throws ValidationError with structured diff on mismatch
+}
+```
 
-**Build-time contract check:** The build step can optionally verify that the TypeScript function's actual signature matches the graph declaration. If the graph says `input password : string` but the TypeScript function takes `(pwd: string)`, the build reports a mismatch. This is a thin layer that parses the TypeScript AST and compares it against the graph's compute node properties.
+**`registry.gen.ts`** — Binds all implementations into a single importable object:
+
+```typescript
+// Generated — DO NOT EDIT
+import { compute_verify_password } from "../impl/compute/verify_password";
+import { compute_hash_password } from "../impl/compute/hash_password";
+// ...
+export const registry = {
+  compute: {
+    verify_password: compute_verify_password,
+    hash_password: compute_hash_password,
+    // ...
+  },
+  adapters: {
+    /* ... */
+  },
+  components: {
+    /* ... */
+  },
+};
+```
+
+**Contract check is always-on.** On every `check` and `build`, the toolchain verifies that every implementation file:
+
+- Exists at the canonical (or overridden) path
+- Exports the correctly-named function
+- Imports types from `contracts.gen.ts` (not inline types)
+- Has a signature that matches the generated contract
+
+Mismatches are structured errors:
+
+```
+ERROR [contract-missing-impl] (global)
+  Compute module 'calculate_discount' has no implementation file.
+  Expected: impl/compute/calculate_discount.ts
+  Run 'graphlang sync' to generate a stub.
+
+ERROR [contract-wrong-export] impl/compute/verify_password.ts
+  Expected export: compute_verify_password
+  Found exports: verify_password
+  Run 'graphlang sync' to fix the export name.
+
+ERROR [contract-signature-drift] impl/compute/hash_password.ts
+  Export 'compute_hash_password' signature does not match graph contract.
+  Expected input: Compute_hash_password_Input (from contracts.gen.ts)
+  Found input: { password: string }
+  Run 'graphlang sync' to rewrite the signature.
+```
 
 ### 5.6 Enum Type Mapping to TypeScript
 
 Tagged enums map to TypeScript discriminated unions. The discriminant field is always `variant`:
 
 **Graph declaration:**
+
 ```
 enum Shape
   Circle
@@ -3119,46 +3485,104 @@ end
 ```
 
 **TypeScript type:**
+
 ```typescript
 type Shape =
-  | { variant: 'Circle'; radius: number }
-  | { variant: 'Rectangle'; width: number; height: number }
-  | { variant: 'Square'; side: number };
+  | { variant: "Circle"; radius: number }
+  | { variant: "Rectangle"; width: number; height: number }
+  | { variant: "Square"; side: number };
 ```
 
 Fieldless variants have only the `variant` discriminant:
 
 ```typescript
 type OrderStatus =
-  | { variant: 'Pending' }
-  | { variant: 'Confirmed' }
-  | { variant: 'Shipped'; carrier: string; tracking_number: string }
-  | { variant: 'Delivered'; delivered_at: string }
-  | { variant: 'Cancelled'; reason: string; cancelled_at: string };
+  | { variant: "Pending" }
+  | { variant: "Confirmed" }
+  | { variant: "Shipped"; carrier: string; tracking_number: string }
+  | { variant: "Delivered"; delivered_at: string }
+  | { variant: "Cancelled"; reason: string; cancelled_at: string };
 ```
 
-Compute modules that accept or return tagged enums use standard TypeScript narrowing:
+Compute modules that accept or return tagged enums use standard TypeScript narrowing. Types are imported from the generated contract surface:
 
 ```typescript
-// compute/describe_shape.ts
-type Shape =
-  | { variant: 'Circle'; radius: number }
-  | { variant: 'Rectangle'; width: number; height: number }
-  | { variant: 'Square'; side: number };
+// impl/compute/describe_shape.ts
+import type { Shape } from "../../.graphlang/gen/types.gen";
+import type {
+  Compute_describe_shape_Input,
+  Compute_describe_shape_Output,
+} from "../../.graphlang/gen/contracts.gen";
 
-export function describe_shape(shape: Shape): { description: string } {
-  switch (shape.variant) {
-    case 'Circle':
-      return { description: `Circle with radius ${shape.radius}` };
-    case 'Rectangle':
-      return { description: `${shape.width}x${shape.height} rectangle` };
-    case 'Square':
-      return { description: `Square with side ${shape.side}` };
+export function compute_describe_shape(
+  input: Compute_describe_shape_Input,
+): Compute_describe_shape_Output {
+  switch (input.shape.variant) {
+    case "Circle":
+      return { description: `Circle with radius ${input.shape.radius}` };
+    case "Rectangle":
+      return {
+        description: `${input.shape.width}x${input.shape.height} rectangle`,
+      };
+    case "Square":
+      return { description: `Square with side ${input.shape.side}` };
   }
 }
 ```
 
-The build-time contract check validates that the TypeScript discriminated union matches the graph's enum declaration — same variant names, same field names and types, `variant` as discriminant.
+The contract check validates that the TypeScript discriminated union in `types.gen.ts` matches the graph's enum declaration — same variant names, same field names and types, `variant` as discriminant. Since types are generated from the graph, drift is impossible.
+
+### 5.7 Implementation Sync and Signature Lock
+
+`graphlang sync` manages the boundary between graph declarations and TypeScript implementations. It is the only command that writes to `impl/` and `.graphlang/gen/`.
+
+**Pipeline:**
+
+1. Parse all `.gln` files → SQLite
+2. Run type checker passes (all 10)
+3. Generate `.graphlang/gen/*` — **always, even when there are type errors** (so AI can reference contracts while fixing graph errors)
+4. Scan `impl/` for existing implementations
+5. For each compute/adapter/component node:
+   - If impl file missing → create stub with correct signature and a `throw new Error('not implemented')` body
+   - If impl exists but export name is wrong → rename the export
+   - If impl exists but signature doesn't match → rewrite the signature (import from contracts.gen.ts), preserve the function body
+   - If impl uses inline types instead of generated imports → rewrite to use imports
+6. Update `.graphlang/manifest.json` with node ID → file path + export symbol mappings
+7. Report: what was generated, what was created, what was rewritten
+
+**Signature lock:** The toolchain owns the signature. When a graph declaration changes (e.g., a compute module gains a new input field), `sync` rewrites the import and signature in the impl file. The function body is never modified — only the AI edits bodies. This means:
+
+- The implementation can never "win" over the graph
+- Drift is corrected automatically, not detected and reported
+- The AI only ever has to fix function bodies, never signatures
+
+**Manifest:**
+
+```json
+{
+  "compute": {
+    "verify_password": {
+      "path": "impl/compute/verify_password.ts",
+      "export": "compute_verify_password",
+      "hash": "a1b2c3..."
+    }
+  },
+  "adapters": {},
+  "components": {}
+}
+```
+
+### 5.8 Runtime Validators
+
+The generated `validators.gen.ts` provides runtime validation for values that cross trust boundaries — adapter outputs and component events. These are the two places where the type system's guarantees thin out: the graph declares what should come back, but the external service or opaque component might return anything.
+
+**Validation behavior:**
+
+- **Dev/test mode:** Hard fail. Adapter returns wrong shape → behavior fails with structured error showing expected vs received.
+- **Production mode:** Configurable. Default: warn and log. Option: hard fail (`--strict-runtime`).
+- **Validation errors** include a structured diff showing exactly which fields are missing, extra, or wrong-typed.
+
+The validators are generated from the same graph declarations that produce `contracts.gen.ts` — one source of truth for both build-time types and runtime checks.
 
 ---
 
@@ -3168,13 +3592,13 @@ Testing is a first-class concern in GraphLang, not an afterthought. The framewor
 
 ### 6.1 Test Layers
 
-| Layer | What's Tested | Substrate | Speed |
-|-------|--------------|-----------|-------|
-| Compute modules | Pure function correctness | None (direct import) | < 100ms for full suite |
-| Type checker | Error detection and messages | In-memory SQLite | < 500ms for full suite |
-| Constraints | Constraint evaluation logic | In-memory SQLite | Fast |
-| Behaviors | Full precondition → compute → mutate pipeline | In-memory SQLite, stubbed adapters | Fast |
-| Integration | Full graph → server → response | In-memory SQLite, test HTTP client | Seconds |
+| Layer           | What's Tested                                 | Substrate                          | Speed                  |
+| --------------- | --------------------------------------------- | ---------------------------------- | ---------------------- |
+| Compute modules | Pure function correctness                     | None (direct import)               | < 100ms for full suite |
+| Type checker    | Error detection and messages                  | In-memory SQLite                   | < 500ms for full suite |
+| Constraints     | Constraint evaluation logic                   | In-memory SQLite                   | Fast                   |
+| Behaviors       | Full precondition → compute → mutate pipeline | In-memory SQLite, stubbed adapters | Fast                   |
+| Integration     | Full graph → server → response                | In-memory SQLite, test HTTP client | Seconds                |
 
 Each layer runs independently. Compute tests don't touch SQLite. Type checker tests don't start a server. Behavior tests don't make network calls.
 
@@ -3184,25 +3608,25 @@ Compute modules are pure functions. Their tests require no setup:
 
 ```typescript
 // tests/compute/calculate_order_total.test.ts
-import { describe, it, expect } from 'vitest';
-import { calculate_order_total } from '../../examples/ecommerce/impl/compute/calculate_order_total';
+import { describe, it, expect } from "vitest";
+import { compute_calculate_order_total } from "../../examples/ecommerce/impl/compute/calculate_order_total";
 
-describe('calculate_order_total', () => {
-  it('sums line items', () => {
-    const result = calculate_order_total({
+describe("compute_calculate_order_total", () => {
+  it("sums line items", () => {
+    const result = compute_calculate_order_total({
       items: [
-        { unit_price: 10.00, quantity: 2 },
-        { unit_price: 5.50, quantity: 1 },
-      ]
+        { unit_price: 10.0, quantity: 2 },
+        { unit_price: 5.5, quantity: 1 },
+      ],
     });
-    expect(result.total).toBe(25.50);
+    expect(result.total).toBe(25.5);
   });
 
-  it('rounds to two decimal places', () => {
-    const result = calculate_order_total({
-      items: [{ unit_price: 0.1, quantity: 3 }]
+  it("rounds to two decimal places", () => {
+    const result = compute_calculate_order_total({
+      items: [{ unit_price: 0.1, quantity: 3 }],
     });
-    expect(result.total).toBe(0.30);
+    expect(result.total).toBe(0.3);
   });
 });
 ```
@@ -3215,11 +3639,11 @@ Type checker tests verify that specific graph definitions produce specific error
 
 ```typescript
 // tests/typechecker/pass-behavior.test.ts
-import { describe, it, expect } from 'vitest';
-import { createTestGraph, runTypeChecker } from '../helpers';
+import { describe, it, expect } from "vitest";
+import { createTestGraph, runTypeChecker } from "../helpers";
 
-describe('behavior type checking', () => {
-  it('catches compute param name mismatch', () => {
+describe("behavior type checking", () => {
+  it("catches compute param name mismatch", () => {
     const graph = createTestGraph(`
       compute verify_password
         input plaintext : string
@@ -3237,13 +3661,13 @@ describe('behavior type checking', () => {
 
     const errors = runTypeChecker(graph);
     expect(errors).toContainError({
-      code: 'behavior-compute-param-mismatch',
-      expected: 'plaintext',
-      received: 'plain_text',
+      code: "behavior-compute-param-mismatch",
+      expected: "plaintext",
+      received: "plain_text",
     });
   });
 
-  it('passes when param names match', () => {
+  it("passes when param names match", () => {
     const graph = createTestGraph(`
       compute verify_password
         input plaintext : string
@@ -3273,38 +3697,40 @@ Behaviors are tested end-to-end using an in-memory graph and behavior executor. 
 
 ```typescript
 // tests/runtime/behavior.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestEnvironment } from '../helpers';
+import { describe, it, expect, beforeEach } from "vitest";
+import { createTestEnvironment } from "../helpers";
 
-describe('update_email', () => {
+describe("update_email", () => {
   let env: TestEnvironment;
 
   beforeEach(() => {
-    env = createTestEnvironment('examples/ecommerce');
+    env = createTestEnvironment("examples/ecommerce");
   });
 
-  it('updates the user email when valid', async () => {
-    const user = env.seed('User', {
-      email: 'old@example.com',
-      name: 'Test User',
-      role: 'customer',
+  it("updates the user email when valid", async () => {
+    const user = env.seed("User", {
+      email: "old@example.com",
+      name: "Test User",
+      role: "customer",
     });
 
-    const result = await env.executeBehavior('update_email',
-      { new_email: 'new@example.com' },
-      { auth: { user } }
+    const result = await env.executeBehavior(
+      "update_email",
+      { new_email: "new@example.com" },
+      { auth: { user } },
     );
 
     expect(result.success).toBe(true);
-    expect(env.find('User', user.id).email).toBe('new@example.com');
+    expect(env.find("User", user.id).email).toBe("new@example.com");
   });
 
-  it('rejects an invalid email format', async () => {
-    const user = env.seed('User', { email: 'old@example.com' });
+  it("rejects an invalid email format", async () => {
+    const user = env.seed("User", { email: "old@example.com" });
 
-    const result = await env.executeBehavior('update_email',
-      { new_email: 'not-an-email' },
-      { auth: { user } }
+    const result = await env.executeBehavior(
+      "update_email",
+      { new_email: "not-an-email" },
+      { auth: { user } },
     );
 
     expect(result.success).toBe(false);
@@ -3323,6 +3749,7 @@ The `graphlang dev` watcher maintains a dependency map to minimize re-work on ev
 - **Node → tests**: which test files exercise this node
 
 On save:
+
 1. Parse the changed file → identify which nodes changed
 2. Run only the type checker passes affected by those node types
 3. If type check passes → run only the tests associated with those nodes
@@ -3341,6 +3768,7 @@ Parses a DSL snippet and writes it to a fresh in-memory SQLite database. Returns
 
 **`createTestEnvironment(appPath: string): TestEnvironment`**
 Loads a full application graph into an in-memory SQLite database. Provides:
+
 - `env.seed(entityType, data)` — insert entity data, returns the entity with generated fields
 - `env.find(entityType, id)` — query a single entity
 - `env.query(entityType, filters)` — query entities with filters
@@ -3408,12 +3836,12 @@ CREATE INDEX idx_entity_data_type ON entity_data(entity_type);
 ### 7.2 Configuration
 
 ```typescript
-import Database from 'better-sqlite3';
+import Database from "better-sqlite3";
 
-const db = new Database('dist/app.db');
-db.pragma('journal_mode = WAL');     // Write-ahead log for concurrency
-db.pragma('synchronous = NORMAL');   // Balance safety/speed
-db.pragma('cache_size = -64000');    // 64MB cache — entire graph fits in memory
+const db = new Database("dist/app.db");
+db.pragma("journal_mode = WAL"); // Write-ahead log for concurrency
+db.pragma("synchronous = NORMAL"); // Balance safety/speed
+db.pragma("cache_size = -64000"); // 64MB cache — entire graph fits in memory
 ```
 
 ### 7.3 Tagged Enum Storage
@@ -3458,23 +3886,23 @@ The compiler reads projection nodes and generates client-side JavaScript. No JS 
 
 ### 8.1 Compilation Mapping
 
-| Graph Construct | Generated JS |
-|----------------|-------------|
-| `state` block | `let` variables in module closure |
-| `bind_value $state.x` | `addEventListener('input', ...)` + value setter |
-| `derived x = ...` | Getter function, re-evaluates when deps change |
-| `derived x = compute(module, ...)` | Direct function call wrapped in dependency tracking |
-| `visible_when <cond>` | Toggle `data-gl-visible` attribute on state change |
-| `enabled_when <cond>` | Toggle `data-gl-enabled` attribute on state change |
-| `on_click set $state.x = y` | `addEventListener('click', ...)` with state mutation |
-| `on_click append/remove` | Array manipulation + DOM re-render of `each` blocks |
-| `submit_to behavior(x)` | `fetch('/api/behavior/x', ...)` with input collection |
-| `debounce 200ms` | `setTimeout` wrapper around state update |
-| `delay(150ms)` | `setTimeout` wrapper around handler |
-| `each <list> as <item>` | Keyed DOM generation loop, re-runs when list changes |
-| `match <expr>` | Switch that unmounts current branch, mounts new branch |
-| `component(x)` | Mount component JS, pass typed props, wire event emitters |
-| `derived q = query(...)` | `fetch` to query endpoint, cached, re-fetches when deps change |
+| Graph Construct                    | Generated JS                                                   |
+| ---------------------------------- | -------------------------------------------------------------- |
+| `state` block                      | `let` variables in module closure                              |
+| `bind_value $state.x`              | `addEventListener('input', ...)` + value setter                |
+| `derived x = ...`                  | Getter function, re-evaluates when deps change                 |
+| `derived x = compute(module, ...)` | Direct function call wrapped in dependency tracking            |
+| `visible_when <cond>`              | Toggle `data-gl-visible` attribute on state change             |
+| `enabled_when <cond>`              | Toggle `data-gl-enabled` attribute on state change             |
+| `on_click set $state.x = y`        | `addEventListener('click', ...)` with state mutation           |
+| `on_click append/remove`           | Array manipulation + DOM re-render of `each` blocks            |
+| `submit_to behavior(x)`            | `fetch('/api/behavior/x', ...)` with input collection          |
+| `debounce 200ms`                   | `setTimeout` wrapper around state update                       |
+| `delay(150ms)`                     | `setTimeout` wrapper around handler                            |
+| `each <list> as <item>`            | Keyed DOM generation loop, re-runs when list changes           |
+| `match <expr>`                     | Switch that unmounts current branch, mounts new branch         |
+| `component(x)`                     | Mount component JS, pass typed props, wire event emitters      |
+| `derived q = query(...)`           | `fetch` to query endpoint, cached, re-fetches when deps change |
 
 ### 8.2 Generated JS Is a Build Artifact
 
@@ -3523,7 +3951,10 @@ HTTP Server (Hono)
 
 ```typescript
 async function executeBehavior(
-  graph: Graph, behaviorId: string, input: any, auth: AuthContext
+  graph: Graph,
+  behaviorId: string,
+  input: any,
+  auth: AuthContext,
 ): Promise<BehaviorResult> {
   const behavior = graph.getNode(behaviorId);
 
@@ -3531,7 +3962,12 @@ async function executeBehavior(
   validateInput(behavior.properties.input, input);
 
   // 2. Build context
-  const ctx = { input, auth, target: await resolveTarget(behavior, input, auth), computed: {} };
+  const ctx = {
+    input,
+    auth,
+    target: await resolveTarget(behavior, input, auth),
+    computed: {},
+  };
 
   // 3. Preconditions (short-circuit on failure)
   for (const pre of behavior.properties.preconditions || []) {
@@ -3543,13 +3979,15 @@ async function executeBehavior(
   for (const step of behavior.properties.compute_steps || []) {
     const params = resolveParams(step.params, ctx);
     const computeModule = await import(`./compute/${step.module}`);
-    ctx.computed[step.alias] = computeModule[step.function](...Object.values(params));
+    ctx.computed[step.alias] = computeModule[step.function](
+      ...Object.values(params),
+    );
 
     // 4a. Validate compute output against declared types
     validateAgainstDeclaredTypes(
       ctx.computed[step.alias],
       graph.getNode(step.module).properties.outputs,
-      `compute:${step.module}`
+      `compute:${step.module}`,
     );
   }
 
@@ -3563,19 +4001,28 @@ async function executeBehavior(
   // 6. Adapter calls (external I/O — BEFORE mutations, so failures don't leave orphaned data)
   for (const call of behavior.properties.adapter_calls || []) {
     const adapter = graph.getNode(call.adapter_id);
-    const action = adapter.properties.actions.find((a: any) => a.name === call.action);
+    const action = adapter.properties.actions.find(
+      (a: any) => a.name === call.action,
+    );
     const params = resolveParams(call.params, ctx);
     try {
-      ctx.adapter_results[call.alias] = await executeAdapterAction(adapter, action, params);
+      ctx.adapter_results[call.alias] = await executeAdapterAction(
+        adapter,
+        action,
+        params,
+      );
     } catch (err) {
-      return { success: false, error: `Adapter call failed: ${call.adapter_id}.${call.action}` };
+      return {
+        success: false,
+        error: `Adapter call failed: ${call.adapter_id}.${call.action}`,
+      };
     }
 
     // 6a. Validate adapter response against declared output types
     validateAgainstDeclaredTypes(
       ctx.adapter_results[call.alias],
       action.outputs,
-      `adapter:${call.adapter_id}.${call.action}`
+      `adapter:${call.adapter_id}.${call.action}`,
     );
   }
 
@@ -3588,7 +4035,8 @@ async function executeBehavior(
 
   // 8. Mutations (atomic)
   db.transaction(() => {
-    for (const m of behavior.properties.mutations || []) executeMutation(m, ctx, db);
+    for (const m of behavior.properties.mutations || [])
+      executeMutation(m, ctx, db);
   })();
 
   // 9. Effects (async, non-blocking)
@@ -3611,16 +4059,22 @@ async function executeBehavior(
 // Prototype behavior: warn on mismatch (log, don't fail). Production could
 // optionally fail hard via a strictness flag.
 function validateAgainstDeclaredTypes(
-  actual: any, declaredOutputs: DeclaredOutput[], source: string
+  actual: any,
+  declaredOutputs: DeclaredOutput[],
+  source: string,
 ): void {
   for (const output of declaredOutputs) {
     const value = actual[output.name];
     if (value === undefined && !output.nullable) {
-      console.warn(`[runtime-type-mismatch] ${source}: expected output '${output.name}' but got undefined`);
+      console.warn(
+        `[runtime-type-mismatch] ${source}: expected output '${output.name}' but got undefined`,
+      );
       continue;
     }
     if (value !== undefined && typeof value !== expectedJsType(output.type)) {
-      console.warn(`[runtime-type-mismatch] ${source}: output '${output.name}' expected ${output.type}, got ${typeof value}`);
+      console.warn(
+        `[runtime-type-mismatch] ${source}: output '${output.name}' expected ${output.type}, got ${typeof value}`,
+      );
     }
   }
 }
@@ -3635,39 +4089,70 @@ Runtime validation is especially important for adapter calls, where the response
 ### 10.1 CLI Commands
 
 ```bash
-# Type-check only (fast inner loop for AI)
+# Sync graph → implementations (generates contracts, creates stubs, rewrites signatures)
+graphlang sync ./app/
+
+# Read-only type check + contract check (no file mutations)
 graphlang check ./app/
 graphlang check ./app/ --format json
 
-# Full build: parse → type-check → compile compute → generate JS → bundle CSS → write SQLite
+# Full build: sync → compile → bundle (calls sync first)
 graphlang build ./app/ --output ./dist/
 
-# Dev server with file watching
+# Dev server with file watching (calls sync on graph changes)
 graphlang dev ./app/ --port 3000
-
-# Validate graph without building
-graphlang validate ./app/
 
 # Seed entity data
 graphlang seed ./app/ --data ./seed.json
 ```
+
+**Command semantics:**
+
+- `sync` — mutates `impl/` and `.graphlang/gen/`. The only command allowed to create/rewrite implementation files. Generates contracts, creates stubs for missing implementations, rewrites drifted signatures, updates the manifest.
+- `check` — read-only diagnostics. Reports type errors AND contract errors but never writes files.
+- `build` — calls `sync` first, then compiles and bundles. Fails if sync produces errors.
+- `dev` — calls `sync` on `.gln` file changes, then incrementally re-checks.
 
 ### 10.2 Build Steps
 
 1. **Parse** all `.gln` files → in-memory AST
 2. **Write to SQLite** → nodes and edges tables
 3. **Type Check** → query SQLite, validate all contracts, report errors
-4. **If errors → STOP.** Output all errors. Do not proceed.
-5. **Run tests** → execute compute, type checker, and behavior test suites; report failures
-6. **If test failures → STOP.** Output failures. Do not proceed.
-7. **Compile compute modules** → TypeScript compiler on compute sources
-8. **Compile Client JS** → projection compiler generates `.js` per projection (includes compute functions used client-side)
-9. **Lint CSS** → PostCSS plugin validates `data-gl-*` selectors against graph (warnings only)
-10. **Bundle CSS** → concatenate and minify CSS source files
-11. **Copy runtime** → shared `graphlang-runtime.js`
-12. **Report** → summary of nodes, edges, modules, generated files
+4. **If type errors → STOP.** Output all errors. Do not proceed.
+5. **Generate `.graphlang/gen/`** → types, contracts, validators, registry
+6. **Sync implementations** → create stubs, rewrite signatures, update manifest
+7. **Contract Check** → verify all impl files match generated contracts
+8. **If contract errors → STOP.** Output errors with "run graphlang sync" suggestions.
+9. **Run tests** → execute compute, type checker, and behavior test suites
+10. **If test failures → STOP.**
+11. **Compile Client JS** → projection compiler generates `.js` per projection
+12. **Lint CSS** → PostCSS plugin validates `data-gl-*` selectors
+13. **Bundle CSS** → concatenate and minify
+14. **Copy runtime** → shared `graphlang-runtime.js`
+15. **Report** → summary
 
 ### 10.3 Output Structure
+
+**Project structure** (source tree with generated artifacts):
+
+```
+app/
+├── .graphlang/
+│   ├── gen/
+│   │   ├── types.gen.ts          # Entity types, tagged enum unions
+│   │   ├── contracts.gen.ts      # Compute/adapter/component signatures
+│   │   ├── validators.gen.ts     # Runtime validators
+│   │   └── registry.gen.ts       # Implementation bindings
+│   └── manifest.json             # Node ID → impl file mapping + hashes
+├── **/*.gln                      # Graph declarations
+├── impl/                         # Toolchain-managed implementations
+│   ├── compute/
+│   ├── adapters/
+│   └── components/
+└── styles/
+```
+
+**Build output:**
 
 ```
 dist/
@@ -3692,6 +4177,7 @@ The prototype tests the core thesis:
 > Can AI modify a typed graph, get specific error feedback, self-correct, and produce a working application update — including across typed boundaries to components and external services?
 
 **Minimum viable prototype:**
+
 - Entities: User, Order, OrderItem, Product
 - Projections: profile_edit (forms + validation), storefront (state + reactivity), order_detail (match expressions)
 - Behaviors: update_email, update_password, place_order (with adapter call)
@@ -3719,7 +4205,7 @@ This is the most important phase. The type checker is the product.
    - Pass 3: Compute module signatures (including `render(...)` output types)
    - Pass 4: Constraint validation
    - Pass 5: Behavior type checking (including adapter calls)
-   - Pass 6: Projection type checking (including match exhaustiveness, transition validation, class bindings, track_* helpers)
+   - Pass 6: Projection type checking (including match exhaustiveness, transition validation, class bindings, track\_\* helpers)
    - Pass 7: Policy completeness
    - Pass 8: Cross-cutting validation
    - Pass 9: Component validation (prop record types, event types)
@@ -3734,15 +4220,17 @@ This is the most important phase. The type checker is the product.
 
 **Goal:** Compute modules run on server and client. CSS pipeline with PostCSS lint.
 
-1. Write example compute modules in TypeScript
+1. Write example compute modules in TypeScript (using single-object-arg convention)
 2. Purity lint pass (no fs, no fetch, no DOM, no randomness)
-3. Contract checker (verify TypeScript function signatures match graph declarations)
-4. Client bundler includes compute functions used in projections
-5. PostCSS lint plugin (validate `data-gl-*` selectors against graph)
-6. CSS bundling (concatenate + minify source CSS files)
-7. Base CSS theme with design tokens and data-attribute styles
+3. Code generation pipeline (types.gen.ts, contracts.gen.ts, validators.gen.ts, registry.gen.ts)
+4. `graphlang sync` command (stub creation, signature rewriting, manifest)
+5. Contract checker (always-on, verify TS signatures match graph declarations — hard fail)
+6. Client bundler includes compute functions used in projections
+7. PostCSS lint plugin (validate `data-gl-*` selectors against graph)
+8. CSS bundling (concatenate + minify source CSS files)
+9. Base CSS theme with design tokens and data-attribute styles
 
-**Test:** `validate_password_strength("Weak")` returns `{ valid: false, reason: "Must be at least 8 characters" }`. PostCSS lint catches a typo in a CSS selector referencing a graph node.
+**Test:** `compute_validate_password_strength({ password: "Weak" })` returns `{ valid: false, reason: "Must be at least 8 characters" }`. PostCSS lint catches a typo in a CSS selector referencing a graph node. `graphlang sync` creates stubs for all compute modules and generates correct contracts.
 
 ### Phase 3: Server Runtime + HTML Rendering (Week 4)
 
@@ -3763,7 +4251,7 @@ This is the most important phase. The type checker is the product.
 
 **Goal:** Forms work. Client-side validation via compute functions. Behaviors execute. Match expressions swap branches.
 
-1. Projection → JS compiler (including match → switch, transition CSS classes, class bindings, track_* helpers)
+1. Projection → JS compiler (including match → switch, transition CSS classes, class bindings, track\_\* helpers)
 2. `graphlang-runtime.js` (reactivity, fetch, component lifecycle manager)
 3. Client-side compute function loading (bundled into projection JS)
 4. Behavior executor on server (including adapter call phase)
@@ -3808,7 +4296,7 @@ graphlang/
 ├── tsconfig.json
 ├── src/
 │   ├── cli/
-│   │   └── index.ts                # CLI: check, build, dev, seed
+│   │   └── index.ts                # CLI: check, sync, build, dev, seed
 │   ├── parser/
 │   │   ├── lexer.ts                # Tokenizer
 │   │   ├── parser.ts               # Recursive descent parser
@@ -3833,10 +4321,16 @@ graphlang/
 │   │   ├── pass-adapter.ts         # Pass 10: Adapter validation
 │   │   ├── errors.ts               # TypeCheckError type + formatting
 │   │   └── suggestions.ts          # "Did you mean?" fuzzy matching
+│   ├── codegen/
+│   │   ├── types.ts               # Generate types.gen.ts
+│   │   ├── contracts.ts           # Generate contracts.gen.ts
+│   │   ├── validators.ts         # Generate validators.gen.ts
+│   │   ├── registry.ts           # Generate registry.gen.ts
+│   │   └── sync.ts               # Stub creation, signature rewriting, manifest
 │   ├── compute/
 │   │   ├── loader.ts               # Import and call compute functions
 │   │   ├── lint.ts                 # Validate purity rules (no fs, no fetch, etc.)
-│   │   └── contract-check.ts       # Verify TS signatures match graph declarations
+│   │   └── contract-check.ts       # Verify TS signatures match graph declarations (always-on, hard fail)
 │   ├── runtime/
 │   │   ├── server.ts               # Hono HTTP server
 │   │   ├── router.ts               # Route resolver
@@ -3862,6 +4356,13 @@ graphlang/
 │       │                           # Subdirectory layout is optional —
 │       │                           # the tooling scans all .gln files
 │       │                           # regardless of directory structure.
+│       ├── .graphlang/
+│       │   ├── gen/
+│       │   │   ├── types.gen.ts          # Generated entity/enum types
+│       │   │   ├── contracts.gen.ts      # Generated compute/adapter/component signatures
+│       │   │   ├── validators.gen.ts     # Generated runtime validators
+│       │   │   └── registry.gen.ts       # Generated implementation bindings
+│       │   └── manifest.json             # Node ID → impl file mapping + hashes
 │       ├── entities/               # Entity & enum declarations
 │       │   ├── user.gln
 │       │   ├── product.gln
@@ -3907,11 +4408,15 @@ graphlang/
 │       │   │   ├── format_currency.ts
 │       │   │   ├── sales_sparkline.ts    # Render compute (returns SVG markup)
 │       │   │   └── markdown_to_html.ts   # Render compute (returns HTML)
-│       │   └── components/           # Component JS implementations
-│       │       ├── chart.js
-│       │       ├── drag_drop_list.js
-│       │       ├── rich_text_editor.js
-│       │       └── data_table.js
+│       │   ├── adapters/              # Adapter implementations
+│       │   │   ├── stripe_payments.ts
+│       │   │   ├── email_sender.ts
+│       │   │   └── analytics.ts
+│       │   └── components/           # Component TS implementations
+│       │       ├── chart.ts
+│       │       ├── drag_drop_list.ts
+│       │       ├── rich_text_editor.ts
+│       │       └── data_table.ts
 └── tests/
     ├── typechecker/
     │   ├── pass-entity.test.ts
@@ -3965,12 +4470,14 @@ graphlang/
 ## 14. Success Criteria
 
 ### Type System (Primary)
+
 1. Type checker catches renamed fields, mismatched params, wrong types, missing required fields, invalid traversals — all with specific error messages
 2. Error messages include: what's wrong, where, what was expected, what was received, and a fix suggestion
 3. AI (Claude) can read error output and fix the graph in ≤2 iterations
 4. JSON error output is parseable by AI tooling
 
 ### Testing (Primary)
+
 5. Every compute module has tests; full compute test suite completes in under 100ms
 6. Type checker tests cover all 10 passes with both valid and invalid fixture graphs
 7. Behavior tests cover the happy path and key failure cases without network or disk I/O
@@ -3978,6 +4485,7 @@ graphlang/
 9. Watch mode delivers feedback in under 1 second for targeted single-file changes
 
 ### Runtime (Secondary)
+
 10. Server renders working HTML from projection nodes
 11. Client JS is generated from projections — no hand-written JS
 12. Compute modules run identically on server and client (same TypeScript, same runtime)
@@ -3988,11 +4496,13 @@ graphlang/
 17. Render compute modules inject format-typed, sanitized markup into projections
 
 ### Impurity Tracking
+
 18. Impurity audit identifies all impurity sources with zero false negatives — every adapter call, component usage, `render(raw)` directive, and `json` type hole is reported
 19. Impurity propagation correctly marks transitive impurity through listener→behavior and projection→behavior chains
-20. Runtime validates adapter and compute outputs against declared types (warn on mismatch in prototype)
+20. Generated runtime validators (`validators.gen.ts`) validate adapter outputs against declared types (hard fail in dev/test, configurable in prod)
 
 ### Thesis Validation (Ultimate)
+
 21. AI-modified graphs with type checking have a measurably lower error rate than AI-modified React code for equivalent changes
 
 ---
@@ -4013,11 +4523,12 @@ graphlang/
 12. **Record type versioning.** When a record type in a component prop changes shape, should the type checker suggest fixes across the graph? Nice to have, not essential — the errors alone are sufficient.
 13. **Match branch DOM cleanup.** Outgoing match branches may contain components that need unmounting and event listeners that need removal. Answered by #7 — unmount fires on branch exit. The compiler generates cleanup code per branch.
 14. **Server-side match rendering.** When match depends on server data and a behavior changes that data, how does the client update? Prototype: behavior response includes a redirect, page reloads with the correct branch rendered server-side.
-15. **Compute contract verification.** Build step verifies TypeScript function signatures match graph declarations by parsing the TS AST. How strict? Prototype: exact param name and type match.
+15. ~~**Compute contract verification.**~~ **Resolved.** Contract check is always-on and hard-fails. The toolchain generates canonical signatures; implementations must match exactly.
 16. **`--strict-purity` flag.** Should there be a CLI flag that promotes `json-type-hole` and `render-raw-unsafe` warnings to errors? Useful for teams that want to enforce purity standards in CI. Prototype: warnings only. Production: opt-in flag.
-17. **Runtime adapter validation strictness.** The prototype logs a warning when an adapter response doesn't match declared output types. Should there be a mode that fails the behavior instead? Trade-off: strictness vs. resilience when external services change their response shape without notice.
+17. ~~**Runtime adapter validation strictness.**~~ **Resolved.** Generated validators from `validators.gen.ts` validate adapter outputs at runtime. Dev/test: hard fail. Prod: configurable via `--strict-runtime`.
 18. **Flat enum to tagged enum migration.** When upgrading a flat `enum(pending, shipped, cancelled)` field to a tagged enum `OrderStatus`, existing `entity_data` rows contain bare strings. The migration tool needs to map `"pending"` → `{ "variant": "Pending" }`. Prototype: wipe and re-seed. Production: automated migration script.
 19. **`@default` for tagged enums.** Only fieldless variants should be usable as default values (e.g., `@default(OrderStatus.Pending)`). Variants with required fields cannot be defaults because there's no sensible way to provide field values at declaration time.
+20. **Sync rewrite granularity.** When `sync` rewrites a signature, how much context does it preserve? Prototype: regex-based rewrite of the function signature line + import block. Production: TS AST-aware rewrite that preserves comments, formatting, and body exactly.
 
 ---
 
@@ -4044,3 +4555,5 @@ graphlang/
 - **Impurity budget** — CI-enforced threshold for pure coverage percentage (e.g., "pure coverage must be ≥ 70%"); fail the build if impurity grows beyond the budget
 - **Adapter mock contracts** — generate typed mock implementations from adapter declarations for testing; behaviors that call adapters can be tested without real external services by using mocks that satisfy the declared output types
 - **json elimination tooling** — AI-assisted migration from `json`-typed fields to `record({...})` types; analyze runtime data to infer record shapes, suggest replacements, and validate that all downstream usages would remain compatible
+- **Automated body generation** — AI generates implementation bodies during `sync` when stubs are created, using graph context (entity types, constraints) as prompt input
+- **Implementation diffing** — `graphlang sync --dry-run` shows what would change without writing files
