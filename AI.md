@@ -9,7 +9,7 @@ This file is for AI agents working on this codebase. Read it before writing any 
 GraphLang is an AI-native application framework. The thesis: applications defined as typed graphs are more reliably authored and modified by AI than traditional codebases, because the type system provides immediate, precise, actionable error feedback at every boundary.
 
 Two layers:
-1. **Graph layer** — `.graph` DSL files declaring typed nodes (entities, behaviors, projections, etc.) and edges (relationships, triggers, calls). Declarative. No computation.
+1. **Graph layer** — `.gln` DSL files declaring typed nodes (entities, behaviors, projections, etc.) and edges (relationships, triggers, calls). Declarative. No computation.
 2. **Compute layer** — pure TypeScript functions for actual computation. No side effects, no I/O, no external state.
 
 The type checker bridges them. It validates every connection in the graph using SQL queries against a SQLite store. When the AI emits a broken graph, the type checker tells it exactly what's wrong and how to fix it.
@@ -70,7 +70,7 @@ src/
   css/              — postcss-lint.ts, bundler.ts
 
 examples/ecommerce/ — the reference application
-  *.graph           — graph definitions
+  *.gln           — graph definitions
   compute/*.ts      — compute module implementations
   components/*.js   — component JS implementations (mount/update/unmount)
   styles/*.css      — CSS source files
@@ -306,12 +306,12 @@ Every type check error must be good enough that Claude can fix it without seeing
 
 Good error:
 ```
-ERROR [behavior-compute-param-mismatch] behaviors.graph:18
+ERROR [behavior-compute-param-mismatch] behaviors.gln:18
   Behavior 'update_password', compute step 'verify_result':
   Calling compute module 'verify_password' with param 'plain_text',
   but module expects 'plaintext'.
 
-  Module signature (compute.graph:8):
+  Module signature (compute.gln:8):
     input plaintext : string
 
   Suggestion: Change 'plain_text' to 'plaintext'

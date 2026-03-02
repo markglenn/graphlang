@@ -1,4 +1,4 @@
-// Graph store types — the runtime representation of parsed .graph files
+// Graph store types — the runtime representation of parsed .gln files
 
 export type CardinalityType = 'has_many' | 'has_one' | 'belongs_to' | 'many_to_many';
 

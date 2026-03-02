@@ -12,7 +12,7 @@ The central bet: the problem with AI-generated code isn't the AI. It's that trad
 
 Applications are defined in two layers:
 
-**The Graph Layer** — a declarative DSL (`.graph` files) describing the entire application as a typed graph: data entities, relationships, UI projections, business logic behaviors, access policies, and external service contracts. The graph handles *what connects to what*. It is not Turing complete by design.
+**The Graph Layer** — a declarative DSL (`.gln` files) describing the entire application as a typed graph: data entities, relationships, UI projections, business logic behaviors, access policies, and external service contracts. The graph handles *what connects to what*. It is not Turing complete by design.
 
 **The Compute Layer** — small, pure TypeScript functions handling actual computation: math, string processing, validation, data transformation. Bounded, testable, side-effect-free.
 

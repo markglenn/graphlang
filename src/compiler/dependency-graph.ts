@@ -1,4 +1,4 @@
-// Builds the dependency graph between .graph files and compute modules
+// Builds the dependency graph between .gln files and compute modules
 // Used for incremental type checking and watch mode
 
 export interface DependencyGraph {

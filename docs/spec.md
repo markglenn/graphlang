@@ -262,6 +262,13 @@ interface TypeMap {
     impurity: ImpurityInfo;  // inferred by Pass 8
   }>;
 
+  // Enum (tagged union) definitions
+  enums: Map<string, {
+    variants: Map<string, {
+      fields: Map<string, ResolvedType>;  // empty for fieldless variants
+    }>;
+  }>;
+
   // Listener impurity tracking (inferred by Pass 8)
   listeners: Map<string, {
     event: string;
@@ -275,12 +282,14 @@ interface TypeMap {
 
 interface ResolvedType {
   base: 'string' | 'integer' | 'decimal' | 'boolean' | 'uuid' | 'timestamp'
-      | 'enum' | 'text' | 'json' | 'list' | 'record' | 'entity_ref' | 'render';
+      | 'enum' | 'tagged_enum' | 'text' | 'json' | 'list' | 'record' | 'entity_ref' | 'render';
   format?: string;        // 'email', 'url', 'phone'
   enum_values?: string[];
   list_item_type?: ResolvedType;
   record_fields?: Map<string, ResolvedType>;  // for record({...}) types
   entity_ref_type?: string;  // which entity
+  tagged_enum_name?: string;     // e.g., 'Shape' — which declared enum
+  tagged_enum_variant?: string;  // when narrowed by match or require...is...as
   render_format?: 'svg' | 'html_safe' | 'raw';  // for render(...) output types
   nullable: boolean;
   constraints: string[];  // 'unique', 'required', 'generated', 'sensitive', 'immutable'
@@ -357,9 +366,9 @@ Subtyping applies everywhere record types are used: component props, adapter act
 
 The type checker runs as a series of SQL-backed passes over the graph. Each pass queries specific node/edge patterns and validates type contracts.
 
-#### Pass 1: Entity Integrity
+#### Pass 1: Entity & Enum Integrity
 
-Verify all entity definitions are self-consistent.
+Verify all entity and enum definitions are self-consistent.
 
 ```sql
 -- Find duplicate field names within an entity
@@ -386,6 +395,59 @@ ERROR [entity-duplicate-field] entities.gln:5
 ERROR [entity-invalid-annotation] entities.gln:7
   Entity 'User', field 'name': @min(1) is not valid on type 'boolean'.
   @min is only valid on types: string, integer, decimal.
+```
+
+**Enum integrity checks:**
+
+Enums (tagged unions) share the same top-level namespace as entities. They are stored as `type = 'enum'` in the `nodes` table.
+
+```sql
+-- Find duplicate enum names or conflicts with entity names
+SELECT n1.id, n1.type, n2.id, n2.type
+FROM nodes n1
+JOIN nodes n2 ON n1.id = n2.id AND n1.rowid < n2.rowid
+WHERE n1.type IN ('entity', 'enum') AND n2.type IN ('entity', 'enum');
+
+-- Find duplicate variant names within an enum
+SELECT n.id, json_extract(v.value, '$.name') as variant_name, COUNT(*) as count
+FROM nodes n, json_each(n.properties, '$.variants') v
+WHERE n.type = 'enum'
+GROUP BY n.id, variant_name
+HAVING count > 1;
+```
+
+Checks:
+- No duplicate enum names
+- No conflicts between enum and entity names (shared namespace)
+- At least two variants per enum
+- No duplicate variant names within an enum
+- No duplicate field names within a variant
+- Variant field types are valid (same rules as entity fields)
+- Variant fields can reference other enums and entities
+
+Errors:
+```
+ERROR [enum-name-conflict] entities.gln:40
+  Enum 'Order' conflicts with entity 'Order' (entities.gln:12).
+  Enums and entities share the same namespace. Choose a different name.
+
+ERROR [enum-no-variants] entities.gln:45
+  Enum 'Status' has only one variant 'Active'.
+  Enums require at least two variants.
+
+ERROR [enum-duplicate-variant] entities.gln:50
+  Enum 'Shape' has duplicate variant 'Circle' (lines 51 and 58).
+  Remove one of the duplicate variant definitions.
+
+ERROR [enum-variant-duplicate-field] entities.gln:52
+  Enum 'Shape', variant 'Circle' has duplicate field 'radius' (lines 52 and 53).
+  Remove one of the duplicate field definitions.
+
+ERROR [enum-variant-invalid-type] entities.gln:55
+  Enum 'Shape', variant 'Rectangle', field 'width': type 'float' is not valid.
+  Valid types: string, integer, decimal, boolean, uuid, timestamp, list(T), json,
+  record({...}), <EntityName>, <EnumName>
+  Did you mean 'decimal'?
 ```
 
 #### Pass 2: Edge Integrity
@@ -423,12 +485,14 @@ Checks:
 - All input/output types are valid
 - Source file paths exist (warning if not — they may not be written yet)
 - No duplicate compute module names
+- When an input or output type name matches a declared enum, it resolves as `tagged_enum` with `tagged_enum_name` set to the enum name
 
 Errors:
 ```
 ERROR [compute-invalid-type] compute.gln:12
   Compute module 'calculate_discount', input 'subtotal': type 'float' is not valid.
-  Valid types: string, integer, decimal, boolean, uuid, timestamp, list(T), json
+  Valid types: string, integer, decimal, boolean, uuid, timestamp, list(T), json,
+  <EnumName>
   Did you mean 'decimal'?
 ```
 
@@ -509,6 +573,7 @@ Checks:
 **Require validation:**
 - Expression references valid compute result fields
 - Expression resolves to boolean
+- `require <expr> is <EnumName>.<Variant> as <binding>` validates that the expression is a tagged enum type, the variant exists on that enum, and the binding receives the variant's fields with correct types
 
 **Mutation validation:**
 - Target entity exists
@@ -518,6 +583,12 @@ Checks:
 - Assigned value type matches the field type
 - `create()` calls include all `@required` fields that aren't `@generated`
 - `decrement()` targets numeric fields
+- When assigning a tagged enum value via `EnumName.Variant(field: value, ...)`:
+  - The enum and variant exist
+  - All variant fields are provided (no missing fields)
+  - No extra fields beyond what the variant declares
+  - Field value types match the variant's declared field types
+  - Fieldless variants use `EnumName.Variant` without parentheses
 
 **Effect validation:**
 - `emit()` event names are valid identifiers
@@ -562,6 +633,29 @@ ERROR [behavior-missing-required] behaviors.gln:32
   Behavior 'place_order', create(Order):
   Missing required field 'total'.
   Order requires: status (has default), total (MISSING), user (provided)
+
+ERROR [behavior-mutate-invalid-variant] behaviors.gln:36
+  Behavior 'ship_order', mutation '$target_order.status = OrderStatus.InTransit(...)':
+  Enum 'OrderStatus' has no variant 'InTransit'.
+  Available variants: Pending, Confirmed, Shipped, Delivered, Cancelled
+  Did you mean 'Shipped'?
+
+ERROR [behavior-mutate-variant-missing-field] behaviors.gln:38
+  Behavior 'ship_order', mutation '$target_order.status = OrderStatus.Shipped(...)':
+  Variant 'Shipped' requires field 'tracking_number' (string).
+  Provided fields: carrier
+  Missing fields: tracking_number
+
+ERROR [behavior-mutate-variant-field-mismatch] behaviors.gln:40
+  Behavior 'ship_order', mutation '$target_order.status = OrderStatus.Shipped(...)':
+  Variant 'Shipped', field 'tracking_number' expects type 'string',
+  received type 'integer'.
+
+ERROR [behavior-require-variant-mismatch] behaviors.gln:44
+  Behavior 'process_payment', require 'payment_step.result is PaymentResult.Approved':
+  Enum 'PaymentResult' has no variant 'Approved'.
+  Available variants: Succeeded, Declined, RequiresAction
+  Did you mean 'Succeeded'?
 ```
 
 **Impurity inference:**
@@ -674,6 +768,26 @@ ERROR [projection-state-type] projections.gln:38
   but earlier reference to cart_items uses field 'unit_price'.
   This may cause a runtime error in derived value 'cart_total'
   which accesses 'item.unit_price'.
+
+ERROR [match-invalid-variant] projections.gln:60
+  Projection 'order_detail', match on 'order.status':
+  Branch 'when Triangle(base, height)': 'Triangle' is not a variant of
+  enum 'Shape'.
+  Available variants: Circle, Rectangle, Square
+
+ERROR [match-incomplete-tagged] projections.gln:65
+  Projection 'drawing_view', match on 'drawing.shape' (enum Shape):
+  Missing variant 'Square'.
+  Covered variants: Circle, Rectangle
+  All variants: Circle, Rectangle, Square
+  Add a 'when Square ... end' branch or add 'else ... end'.
+
+ERROR [match-destructure-invalid-field] projections.gln:70
+  Projection 'drawing_view', match on 'drawing.shape',
+  branch 'when Circle(r)':
+  Destructured name 'r' does not match any field on variant 'Circle'.
+  Available fields: radius (decimal)
+  Did you mean 'radius'?
 ```
 
 #### Pass 7: Policy Completeness
@@ -727,6 +841,24 @@ AND e.to_node NOT IN (
   WHERE pol.type = 'policy'
 );
 
+-- Find enums declared but never referenced by any entity field, compute I/O,
+-- behavior input, component prop, or adapter action
+SELECT n.id FROM nodes n
+WHERE n.type = 'enum'
+AND n.id NOT IN (
+  SELECT DISTINCT json_extract(f.value, '$.type')
+  FROM nodes e, json_each(e.properties, '$.fields') f
+  WHERE e.type = 'entity'
+  UNION
+  SELECT DISTINCT json_extract(p.value, '$.type')
+  FROM nodes c, json_each(c.properties, '$.inputs') p
+  WHERE c.type = 'compute'
+  UNION
+  SELECT DISTINCT json_extract(o.value, '$.type')
+  FROM nodes c, json_each(c.properties, '$.outputs') o
+  WHERE c.type = 'compute'
+);
+
 -- Find compute modules declared but never referenced
 SELECT c.id FROM nodes c
 WHERE c.type = 'compute'
@@ -751,6 +883,7 @@ AND json_extract(b.properties, '$.trigger_projection') NOT IN (
 Checks:
 - No orphan nodes (nodes with no edges — warning level)
 - No unused compute modules (warning level)
+- No unused enums (warning level)
 - No circular preconditions (behavior A requires constraint that triggers behavior A)
 - Every behavior trigger references a valid projection and action
 - Event listeners reference valid event names that are actually emitted somewhere
@@ -761,6 +894,10 @@ Warnings:
 WARNING [unused-compute] compute.gln:18
   Compute module 'generate_confirmation_code' is declared but never referenced
   by any behavior or constraint.
+
+WARNING [unused-enum] entities.gln:80
+  Enum 'Priority' is declared but never referenced by any entity field,
+  compute module, behavior, component, or adapter.
 
 WARNING [unreachable-listener] behaviors.gln:60
   Listener 'send_order_confirmation' listens for event 'order.confirmed',
@@ -900,8 +1037,8 @@ Checks:
 
 **Component declarations:**
 - Source file path exists (warning if missing)
-- Prop types are valid (including record type field validation)
-- Event types are valid
+- Prop types are valid (including record type field validation and tagged enum references)
+- Event types are valid (including tagged enum references)
 - No duplicate prop/event names
 - Component name doesn't conflict with built-in layout primitives
 
@@ -986,7 +1123,7 @@ Checks:
 
 **Adapter declarations:**
 - Config values referencing `env()` use valid environment variable names (warning level)
-- Action input/output types are valid
+- Action input/output types are valid (including tagged enum references)
 - No duplicate action names within an adapter
 - No duplicate input/output names within an action
 
@@ -1297,6 +1434,86 @@ entity OrderItem
 end
 ```
 
+#### Enum Nodes (Tagged Unions)
+
+Define algebraic data types (tagged unions) where each variant can carry its own typed fields. Enums share the same top-level namespace as entities and are stored as `type = 'enum'` in the `nodes` table.
+
+```
+enum Shape
+  Circle
+    field radius : decimal
+  end
+  Rectangle
+    field width : decimal
+    field height : decimal
+  end
+  Square
+    field side : decimal
+  end
+end
+```
+
+Variants can be fieldless (carrying no data) or have one or more typed fields. An enum can mix both:
+
+```
+enum OrderStatus
+  Pending
+  end
+  Confirmed
+  end
+  Shipped
+    field carrier : string
+    field tracking_number : string
+  end
+  Delivered
+    field delivered_at : timestamp
+  end
+  Cancelled
+    field reason : string
+    field cancelled_at : timestamp
+  end
+end
+
+enum PaymentResult
+  Succeeded
+    field charge_id : string
+    field amount : integer
+  end
+  Declined
+    field reason : string
+  end
+  RequiresAction
+    field action_url : string
+  end
+end
+```
+
+**Rules:**
+- Variant names use PascalCase (convention, not enforced)
+- Each enum must have at least two variants
+- Variant field types follow the same rules as entity fields — including references to other enums and entities
+- Enum names and entity names share the same namespace — no conflicts allowed
+- Enum names can be used as field types on entities, compute I/O, behavior inputs, component props, and adapter actions
+- Fieldless variants omit the `field` declarations but still require `end`
+
+**Using enums as field types:**
+
+```
+entity Drawing
+  field id : uuid @generated
+  field name : string @required
+  field shape : Shape @required
+end
+
+entity Order
+  field id : uuid @generated
+  field status : OrderStatus @default(OrderStatus.Pending)
+  field total : decimal @required
+end
+```
+
+The inline `enum(val1, val2, ...)` syntax remains unchanged for simple restricted-value fields. Use top-level `enum Name ... end` when variants need to carry data.
+
 **Supported field types:**
 - `string` — short text, supports `@min(n)`, `@max(n)`, `@format(email|url|phone)`
 - `text` — long text, no length limits
@@ -1305,7 +1522,8 @@ end
 - `boolean` — true/false
 - `uuid` — universally unique identifier
 - `timestamp` — ISO 8601 datetime
-- `enum(val1, val2, ...)` — restricted set of values
+- `enum(val1, val2, ...)` — restricted set of string values (flat enum, no associated data)
+- `<EnumName>` — reference to a declared enum (tagged union). Values carry a `variant` discriminant and variant-specific fields.
 - `record({ field: type, ... })` — inline structured type with named, typed fields. Enables full type checking through component props, adapter actions, and behavior inputs without resorting to `json`.
 - `list(T)` — ordered collection of any type T, including `list(record({...}))` for typed collections
 - `json` — arbitrary JSON blob. **Escape hatch — use sparingly.** Every `json` usage is a hole in the type system where the checker can't validate field access. Prefer `record({...})` when the shape is known.
@@ -1683,6 +1901,75 @@ behavior place_order_with_payment
 end
 ```
 
+**Tagged enum construction and narrowing in behaviors:**
+
+When a mutation targets a field typed as a tagged enum, use `EnumName.Variant(field: value, ...)` syntax. For fieldless variants, omit the parentheses:
+
+```
+behavior ship_order
+  trigger projection(order_detail).action(ship_btn)
+
+  input
+    carrier : string
+    tracking_number : string
+  end
+
+  # Construct a tagged enum variant with fields
+  mutate $target_order.status = OrderStatus.Shipped(
+    carrier: $input.carrier,
+    tracking_number: $input.tracking_number
+  )
+
+  on_success show_message("Order shipped", type: success)
+end
+
+behavior cancel_order
+  trigger projection(order_detail).action(cancel_btn)
+
+  input
+    reason : string
+  end
+
+  # Fieldless variant — no parentheses
+  # (or with fields if Cancelled has them)
+  mutate $target_order.status = OrderStatus.Cancelled(
+    reason: $input.reason,
+    cancelled_at: now()
+  )
+
+  on_success show_message("Order cancelled", type: success)
+end
+```
+
+Use `require ... is ... as` to narrow a tagged enum to a specific variant and bind its fields:
+
+```
+behavior process_payment
+  trigger projection(checkout).action(pay_btn)
+
+  input
+    payment_token : string
+  end
+
+  compute payment_step = process_charge(token: $input.payment_token)
+
+  # Narrow to a specific variant — 'success' gets Succeeded's fields
+  require payment_step.result is PaymentResult.Succeeded as success
+    else "Payment failed"
+
+  # 'success' now has fields: charge_id (string), amount (integer)
+  mutate $new_order = create(Order,
+    status: OrderStatus.Confirmed,
+    total: success.amount,
+    payment_id: success.charge_id,
+    user: $auth.user
+  )
+
+  on_success navigate("/orders/" + $new_order.id)
+  on_failure show_message($error, type: error)
+end
+```
+
 **Special variables:**
 - `$input` — the input data from the trigger
 - `$target` or `$target_<entity>` — the entity being operated on
@@ -2022,6 +2309,66 @@ match order.status
 end
 ```
 
+**Match on tagged enums (destructuring):**
+
+When matching on a field typed as a tagged enum, branches use variant names and destructure the variant's fields into local bindings:
+
+```
+match drawing.shape
+  when Circle(radius)
+    section
+      text "Circle with radius " + radius
+      text "Area: " + compute(format_currency, amount: 3.14159 * radius * radius, currency: "sq units")
+    end
+
+  when Rectangle(width, height)
+    section
+      text "Rectangle: " + width + " x " + height
+      text "Area: " + compute(format_currency, amount: width * height, currency: "sq units")
+    end
+
+  when Square(side)
+    section
+      text "Square with side " + side
+      text "Area: " + compute(format_currency, amount: side * side, currency: "sq units")
+    end
+end
+```
+
+Fieldless variants use just the name, no parentheses:
+
+```
+match order.status
+  when Pending
+    text "Your order is being processed."
+
+  when Confirmed
+    text "Order confirmed."
+
+  when Shipped(carrier, tracking_number)
+    section
+      text "Shipped via " + carrier
+      text "Tracking: " + tracking_number
+    end
+
+  when Delivered(delivered_at)
+    text "Delivered on " + delivered_at
+
+  when Cancelled(reason, cancelled_at)
+    section
+      text "Cancelled: " + reason style(error)
+      text "on " + cancelled_at style(muted)
+    end
+end
+```
+
+The type checker validates:
+- Every variant name in a `when` branch exists on the matched enum
+- Destructured names match the variant's declared field names exactly
+- Destructured bindings are scoped to the branch and typed according to the variant's field types
+- Exhaustiveness: every variant is covered, or an `else` branch exists
+- Fieldless variants must not have parentheses; variants with fields must destructure all fields
+
 **Match with transitions:**
 
 ```
@@ -2034,14 +2381,22 @@ The transition modifier tells the compiler to animate between branches. The outg
 
 **Type checker behavior with match:**
 
-- When matching on an enum field, the type checker verifies every enum value is covered, or that an `else` branch exists. Missing values produce a warning:
+- When matching on a flat `enum(...)` field, the type checker verifies every enum value is covered, or that an `else` branch exists. Missing values produce a warning:
   ```
   WARNING [match-incomplete] projections.gln:25
     match on 'order.status': missing enum value "confirmed".
     Values for Order.status: pending, confirmed, shipped, delivered, cancelled
     Add a branch or add 'else ... end'
   ```
-- Each branch is type-checked independently — bindings, component props, behavior wiring are all validated per branch.
+- When matching on a tagged enum field, the type checker verifies every variant is covered, or that an `else` branch exists. Each branch must destructure the correct field names. Missing variants produce a warning:
+  ```
+  WARNING [match-incomplete-tagged] projections.gln:30
+    match on 'drawing.shape' (enum Shape): missing variant 'Square'.
+    Covered variants: Circle, Rectangle
+    All variants: Circle, Rectangle, Square
+    Add a 'when Square ... end' branch or add 'else ... end'.
+  ```
+- Each branch is type-checked independently — bindings, component props, behavior wiring are all validated per branch. For tagged enum branches, destructured field bindings are available as typed locals within the branch.
 - When matching on a boolean, the type checker expects `when true` and `when false` branches.
 - When matching on client state, the compiler generates a switch that swaps DOM subtrees on state change.
 - When matching on server data, the server renders the correct branch initially and the client handles transitions if the data changes.
@@ -2741,6 +3096,68 @@ export function validate_password_strength(password: string): { valid: boolean; 
 
 **Build-time contract check:** The build step can optionally verify that the TypeScript function's actual signature matches the graph declaration. If the graph says `input password : string` but the TypeScript function takes `(pwd: string)`, the build reports a mismatch. This is a thin layer that parses the TypeScript AST and compares it against the graph's compute node properties.
 
+### 5.6 Enum Type Mapping to TypeScript
+
+Tagged enums map to TypeScript discriminated unions. The discriminant field is always `variant`:
+
+**Graph declaration:**
+```
+enum Shape
+  Circle
+    field radius : decimal
+  end
+  Rectangle
+    field width : decimal
+    field height : decimal
+  end
+  Square
+    field side : decimal
+  end
+end
+```
+
+**TypeScript type:**
+```typescript
+type Shape =
+  | { variant: 'Circle'; radius: number }
+  | { variant: 'Rectangle'; width: number; height: number }
+  | { variant: 'Square'; side: number };
+```
+
+Fieldless variants have only the `variant` discriminant:
+
+```typescript
+type OrderStatus =
+  | { variant: 'Pending' }
+  | { variant: 'Confirmed' }
+  | { variant: 'Shipped'; carrier: string; tracking_number: string }
+  | { variant: 'Delivered'; delivered_at: string }
+  | { variant: 'Cancelled'; reason: string; cancelled_at: string };
+```
+
+Compute modules that accept or return tagged enums use standard TypeScript narrowing:
+
+```typescript
+// compute/describe_shape.ts
+type Shape =
+  | { variant: 'Circle'; radius: number }
+  | { variant: 'Rectangle'; width: number; height: number }
+  | { variant: 'Square'; side: number };
+
+export function describe_shape(shape: Shape): { description: string } {
+  switch (shape.variant) {
+    case 'Circle':
+      return { description: `Circle with radius ${shape.radius}` };
+    case 'Rectangle':
+      return { description: `${shape.width}x${shape.height} rectangle` };
+    case 'Square':
+      return { description: `Square with side ${shape.side}` };
+  }
+}
+```
+
+The build-time contract check validates that the TypeScript discriminated union matches the graph's enum declaration — same variant names, same field names and types, `variant` as discriminant.
+
 ---
 
 ## 6. Testing
@@ -2973,6 +3390,11 @@ CREATE TABLE sessions (
   expires_at TIMESTAMP
 );
 
+-- Note: enum declarations are stored as nodes with type = 'enum',
+-- properties containing variants and their fields as JSON.
+-- Entity data with tagged enum fields stores the value as JSON
+-- with a 'variant' discriminant (see Section 7.3).
+
 -- Indexes for type checker and runtime queries
 CREATE INDEX idx_edges_from ON edges(from_node, type);
 CREATE INDEX idx_edges_to ON edges(to_node, type);
@@ -2990,6 +3412,40 @@ const db = new Database('dist/app.db');
 db.pragma('journal_mode = WAL');     // Write-ahead log for concurrency
 db.pragma('synchronous = NORMAL');   // Balance safety/speed
 db.pragma('cache_size = -64000');    // 64MB cache — entire graph fits in memory
+```
+
+### 7.3 Tagged Enum Storage
+
+Tagged enum values in `entity_data` are stored as JSON objects with a `variant` discriminant field:
+
+```json
+// Shape field on a Drawing entity — variant with fields
+{ "variant": "Circle", "radius": 5.0 }
+{ "variant": "Rectangle", "width": 10.0, "height": 4.0 }
+{ "variant": "Square", "side": 7.5 }
+
+// OrderStatus field — fieldless variant
+{ "variant": "Pending" }
+
+// OrderStatus field — variant with fields
+{ "variant": "Shipped", "carrier": "FedEx", "tracking_number": "1234567890" }
+```
+
+Flat `enum(val1, val2, ...)` fields continue to be stored as bare strings (e.g., `"pending"`, `"admin"`). Only tagged enums use the JSON object format.
+
+Tagged enum values are queryable via SQLite's `json_extract`:
+
+```sql
+-- Find all orders with Shipped status
+SELECT * FROM entity_data
+WHERE entity_type = 'Order'
+AND json_extract(data, '$.status.variant') = 'Shipped';
+
+-- Find shipped orders with a specific carrier
+SELECT * FROM entity_data
+WHERE entity_type = 'Order'
+AND json_extract(data, '$.status.variant') = 'Shipped'
+AND json_extract(data, '$.status.carrier') = 'FedEx';
 ```
 
 ---
@@ -3363,7 +3819,7 @@ graphlang/
 │   ├── typechecker/
 │   │   ├── index.ts                # Orchestrate all passes
 │   │   ├── type-map.ts             # Build the TypeMap from SQLite
-│   │   ├── pass-entity.ts          # Pass 1: Entity integrity
+│   │   ├── pass-entity.ts          # Pass 1: Entity & Enum integrity
 │   │   ├── pass-edge.ts            # Pass 2: Edge integrity
 │   │   ├── pass-compute.ts         # Pass 3: Compute signatures
 │   │   ├── pass-constraint.ts      # Pass 4: Constraint validation
@@ -3531,6 +3987,8 @@ graphlang/
 15. **Compute contract verification.** Build step verifies TypeScript function signatures match graph declarations by parsing the TS AST. How strict? Prototype: exact param name and type match.
 16. **`--strict-purity` flag.** Should there be a CLI flag that promotes `json-type-hole` and `render-raw-unsafe` warnings to errors? Useful for teams that want to enforce purity standards in CI. Prototype: warnings only. Production: opt-in flag.
 17. **Runtime adapter validation strictness.** The prototype logs a warning when an adapter response doesn't match declared output types. Should there be a mode that fails the behavior instead? Trade-off: strictness vs. resilience when external services change their response shape without notice.
+18. **Flat enum to tagged enum migration.** When upgrading a flat `enum(pending, shipped, cancelled)` field to a tagged enum `OrderStatus`, existing `entity_data` rows contain bare strings. The migration tool needs to map `"pending"` → `{ "variant": "Pending" }`. Prototype: wipe and re-seed. Production: automated migration script.
+19. **`@default` for tagged enums.** Only fieldless variants should be usable as default values (e.g., `@default(OrderStatus.Pending)`). Variants with required fields cannot be defaults because there's no sensible way to provide field values at declaration time.
 
 ---
 
@@ -3549,6 +4007,7 @@ graphlang/
 - **Adapter library** — pre-built typed adapter definitions for common services (Stripe, Twilio, SendGrid, AWS S3, Google Maps, etc.)
 - **Adapter codegen** — generate typed adapter declarations from OpenAPI/Swagger specs automatically
 - **Render compute library** — pre-built TypeScript modules for common rendering (markdown, syntax highlighting, SVG charts, QR codes)
+- **Generic enums** — parameterized tagged enums like `Result<T, E>` and `Option<T>` for representing fallible operations and optional values in the type system; requires generics support in the type checker
 - **Cross-graph composition** — import entities, components, and adapters from other GraphLang projects as typed dependencies
 - **Record type inference** — when a behavior creates an object literal, infer the record type and validate downstream usage without requiring explicit type annotation
 - **Generic record types** — parameterized record types for components that work with any data shape: `component data_table<T extends record({ id: uuid })>` where T is the row type

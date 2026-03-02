@@ -2,7 +2,7 @@ const USAGE = `
 GraphLang CLI
 
 Usage:
-  graphlang check   — Type-check all .graph files in the project
+  graphlang check   — Type-check all .gln files in the project
   graphlang build   — Build the project for production
   graphlang dev     — Start the development server with watch mode
   graphlang seed    — Run seed scripts to populate the database
