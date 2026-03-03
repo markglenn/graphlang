@@ -1,0 +1,20 @@
+pipeline place_order
+  input items : list(record({
+    product_id : uuid,
+    title : string,
+    unit_price : decimal,
+    quantity : integer
+  }))
+
+  precondition is_role(required_role: "customer")
+
+  orderData <- compute build_order(items: items)
+  order     <- create Order(data: orderData.order)
+  create OrderItem(data: orderData.items, parent: order)
+  update Product(data: orderData.inventory_updates)
+  emit order.placed(order: order)
+end
+
+on order.placed
+  trigger send_confirmation_email(order: $event.order)
+end

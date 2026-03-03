@@ -1,0 +1,8 @@
+entity OrderItem
+  field id : uuid @generated
+  field quantity : integer @required @min(1)
+  field unit_price : decimal @required @min(0)
+
+  belongs_to Order @required
+  belongs_to Product @required
+end

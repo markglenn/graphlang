@@ -1,0 +1,16 @@
+component data_table
+  description "Sortable, filterable data table"
+
+  prop data : list(record({
+    id : uuid
+  })) @required
+  prop columns : list(record({
+    field : string,
+    label : string,
+    sortable : boolean @default(true)
+  })) @required
+  prop page_size : integer @default(25)
+
+  event on_row_click : record({ id : uuid })
+  event on_sort : record({ field : string, direction : enum(asc, desc) })
+end

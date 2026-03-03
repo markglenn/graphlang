@@ -1,0 +1,8 @@
+entity Product
+  field id : uuid @generated
+  field title : string @required @min(1) @max(200)
+  field description : text
+  field price : decimal @required @min(0)
+  field inventory : integer @required @min(0) @default(0)
+  field active : boolean @default(true)
+end

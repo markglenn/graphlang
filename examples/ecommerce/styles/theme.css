@@ -1,0 +1,129 @@
+/* GraphLang ecommerce theme — targets generated data-gl-* attributes */
+
+[data-gl-projection] {
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #1a1a1a;
+  line-height: 1.5;
+}
+
+[data-gl-node="heading"] {
+  margin-bottom: 0.5em;
+}
+
+[data-gl-node="card"] {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1rem;
+  background: #fff;
+}
+
+[data-gl-node="grid"] {
+  display: grid;
+  gap: 1rem;
+}
+
+[data-gl-node="row"] {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+[data-gl-node="divider"] {
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  margin: 1.5rem 0;
+}
+
+/* Text styles */
+[data-gl-text-style="bold"] {
+  font-weight: 600;
+}
+
+[data-gl-text-style="muted"] {
+  color: #666;
+}
+
+[data-gl-text-style="error"] {
+  color: #d32f2f;
+}
+
+[data-gl-text-style="success"] {
+  color: #2e7d32;
+}
+
+/* Action styles */
+[data-gl-action-style="primary"] {
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1.25rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+[data-gl-action-style="primary"]:hover {
+  background: #1565c0;
+}
+
+[data-gl-action-style="secondary"] {
+  background: #fff;
+  color: #1976d2;
+  border: 1px solid #1976d2;
+  border-radius: 4px;
+  padding: 0.5rem 1.25rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+[data-gl-action-style="danger"] {
+  background: #d32f2f;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1.25rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+[data-gl-action-style="link"] {
+  background: none;
+  border: none;
+  color: #1976d2;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+/* Visibility */
+[data-gl-visible="false"] {
+  display: none;
+}
+
+/* Disabled state */
+[data-gl-enabled="false"] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Form fields */
+[data-gl-type="field"] input,
+[data-gl-type="field"] textarea,
+[data-gl-type="field"] select {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+[data-gl-type="field"] label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #333;
+}

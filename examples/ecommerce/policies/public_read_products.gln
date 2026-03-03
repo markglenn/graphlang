@@ -1,0 +1,9 @@
+policy public_read_products
+  description "Anyone can read active products, admins can write"
+  applies_to Product
+  rule
+    allow read when $target.active == true
+    allow write when is_role(required_role: "admin")
+    deny all
+  end
+end

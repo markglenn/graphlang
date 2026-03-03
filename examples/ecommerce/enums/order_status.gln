@@ -1,0 +1,17 @@
+enum OrderStatus
+  Pending
+  end
+  Confirmed
+  end
+  Shipped
+    field carrier : string
+    field tracking_number : string
+  end
+  Delivered
+    field delivered_at : timestamp
+  end
+  Cancelled
+    field reason : string
+    field cancelled_at : timestamp
+  end
+end

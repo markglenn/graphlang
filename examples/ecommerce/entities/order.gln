@@ -1,0 +1,10 @@
+entity Order
+  field id : uuid @generated
+  field status : OrderStatus @default(OrderStatus.Pending)
+  field total : decimal @required @min(0)
+  field created_at : timestamp @generated
+  field updated_at : timestamp @generated
+
+  has_many OrderItem @on_delete(cascade)
+  belongs_to User @required
+end

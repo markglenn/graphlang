@@ -1,0 +1,90 @@
+projection storefront
+  description "Customer-facing product catalog"
+  route /shop
+  auth optional
+
+  data
+    bind products = query(Product, where: active == true, order: title asc)
+  end
+
+  state
+    search_term : string = ""
+    cart_items : list(record({
+      product_id : uuid,
+      title : string,
+      unit_price : decimal,
+      quantity : integer
+    })) = []
+    cart_visible : boolean = false
+  end
+
+  derived
+    filtered_products = products | where(title contains $state.search_term)
+    cart_count = count($state.cart_items)
+    cart_total = compute(format_currency,
+      amount: compute(calculate_order_total, items: $state.cart_items),
+      currency: "USD"
+    )
+  end
+
+  layout
+    page max_width(wide) padding(comfortable)
+      heading level(1) "Shop"
+
+      section id(search_bar)
+        field id(search) type(text) label("Search Products")
+          bind_value $state.search_term
+          debounce 200ms
+        end
+      end
+
+      grid columns(3) gap(medium)
+        each filtered_products as product
+          card
+            text product.title style(bold)
+            text compute(format_currency, amount: product.price, currency: "USD")
+            text product.inventory + " in stock"
+
+            action id(add_to_cart) label("Add to Cart") style(secondary)
+              enabled_when product.inventory > 0
+              on_click
+                append $state.cart_items = {
+                  product_id: product.id,
+                  title: product.title,
+                  unit_price: product.price,
+                  quantity: 1
+                }
+                set $state.cart_visible = true
+              end
+            end
+          end
+        end
+      end
+
+      section id(cart_section) visible_when $state.cart_visible
+        heading level(2) "Cart (" + cart_count + " items)"
+
+        each $state.cart_items as item
+          row
+            text item.title
+            text "x" + item.quantity
+            text compute(format_currency,
+              amount: item.quantity * item.unit_price, currency: "USD")
+            action label("Remove") style(link)
+              on_click remove $state.cart_items where product_id == item.product_id
+            end
+          end
+        end
+
+        text "Total: " + cart_total style(bold)
+
+        action id(checkout_btn) label("Checkout") style(primary)
+          submit_to pipeline(place_order)
+          send items = $state.cart_items
+          on_success navigate("/orders/" + $result.order.id)
+          on_failure show_message($error, type: error)
+        end
+      end
+    end
+  end
+end

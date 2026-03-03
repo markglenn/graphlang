@@ -1,0 +1,11 @@
+entity User
+  field id : uuid @generated
+  field email : string @format(email) @unique @required
+  field password_hash : string @sensitive @required
+  field name : string @required @min(1) @max(100)
+  field role : enum(admin, customer) @default(customer)
+  field created_at : timestamp @generated
+  field updated_at : timestamp @generated
+
+  has_many Order @on_delete(cascade)
+end
