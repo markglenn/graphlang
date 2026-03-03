@@ -40,22 +40,15 @@ projection storefront
 
       grid columns(3) gap(medium)
         each filtered_products as product
-          card
-            text product.title style(bold)
-            text compute(format_currency, amount: product.price, currency: "USD")
-            text product.inventory + " in stock"
-
-            action id(add_to_cart) label("Add to Cart") style(secondary)
-              enabled_when product.inventory > 0
-              on_click
-                append $state.cart_items = {
-                  product_id: product.id,
-                  title: product.title,
-                  unit_price: product.price,
-                  quantity: 1
-                }
-                set $state.cart_visible = true
-              end
+          product_card(product: product)
+            on_add_to_cart
+              append $state.cart_items = {
+                product_id: $event.id,
+                title: $event.title,
+                unit_price: $event.price,
+                quantity: 1
+              }
+              set $state.cart_visible = true
             end
           end
         end
@@ -65,13 +58,9 @@ projection storefront
         heading level(2) "Cart (" + cart_count + " items)"
 
         each $state.cart_items as item
-          row
-            text item.title
-            text "x" + item.quantity
-            text compute(format_currency,
-              amount: item.quantity * item.unit_price, currency: "USD")
-            action label("Remove") style(link)
-              on_click remove $state.cart_items where product_id == item.product_id
+          cart_item_row(item: item)
+            on_remove
+              remove $state.cart_items where product_id == $event.product_id
             end
           end
         end

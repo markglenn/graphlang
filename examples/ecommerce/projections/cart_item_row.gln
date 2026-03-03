@@ -1,0 +1,22 @@
+projection cart_item_row
+  prop item : record({
+    product_id : uuid,
+    title : string,
+    unit_price : decimal,
+    quantity : integer
+  })
+
+  event on_remove : record({ product_id : uuid })
+
+  layout
+    row
+      text item.title
+      text "x" + item.quantity
+      text compute(format_currency, amount: item.quantity * item.unit_price, currency: "USD")
+
+      action label("Remove") style(link)
+        on_click emit on_remove(product_id: item.product_id)
+      end
+    end
+  end
+end

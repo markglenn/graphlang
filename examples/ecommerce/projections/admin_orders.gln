@@ -1,0 +1,37 @@
+projection admin_orders
+  description "Admin view of all orders"
+  route /admin/orders
+  auth required
+  policy admin_dashboard_access
+
+  data
+    bind orders = query(Order, order: created_at desc)
+  end
+
+  state
+    sort_field : string = "created_at"
+    sort_direction : enum(asc, desc) = "desc"
+  end
+
+  layout
+    page max_width(wide) padding(comfortable)
+      heading level(1) "Orders"
+
+      component(data_table)
+        bind data = orders
+        columns([
+          { field: "id", label: "Order ID" },
+          { field: "total", label: "Total", sortable: true },
+          { field: "status", label: "Status", sortable: true },
+          { field: "created_at", label: "Date", sortable: true }
+        ])
+        page_size(50)
+        on_row_click navigate("/orders/" + $event.id)
+        on_sort
+          set $state.sort_field = $event.field
+          set $state.sort_direction = $event.direction
+        end
+      end
+    end
+  end
+end

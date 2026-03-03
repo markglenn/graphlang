@@ -1,0 +1,18 @@
+projection product_card
+  prop product : Product
+
+  event on_add_to_cart : Product
+
+  layout
+    card
+      text product.title style(bold)
+      text compute(format_currency, amount: product.price, currency: "USD")
+      text product.inventory + " in stock"
+
+      action id(add_to_cart) label("Add to Cart") style(secondary)
+        enabled_when product.inventory > 0
+        on_click emit on_add_to_cart(product)
+      end
+    end
+  end
+end
