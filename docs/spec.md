@@ -12,7 +12,7 @@
 
 ### The Problem: AI Can't See Architecture
 
-AI is remarkably good at writing individual functions. It struggles with *systems* — the connections between functions, the data flowing across boundaries, the downstream consequences of a change.
+AI is remarkably good at writing individual functions. It struggles with _systems_ — the connections between functions, the data flowing across boundaries, the downstream consequences of a change.
 
 The root cause isn't AI capability. It's that traditional codebases hide architecture:
 
@@ -20,7 +20,7 @@ The root cause isn't AI capability. It's that traditional codebases hide archite
 
 **AI context windows are finite.** A 2,000-file application can't fit in any context window. The AI has to guess which files are relevant, read a subset, infer relationships from import chains and naming conventions, and hope it found everything. It usually hasn't. The files it missed are where the bugs hide.
 
-**Changes cascade invisibly.** Rename a field on an entity. Which API endpoints break? Which downstream services consume that field? Which flows depend on it? In a traditional codebase, answering this requires a full-text search across every file, manual interpretation of each match, and judgment about whether the match is a real dependency or a coincidence. AI does this poorly because the answer isn't in any single file — it's in the *relationships between* files, and those relationships aren't written down anywhere.
+**Changes cascade invisibly.** Rename a field on an entity. Which API endpoints break? Which downstream services consume that field? Which flows depend on it? In a traditional codebase, answering this requires a full-text search across every file, manual interpretation of each match, and judgment about whether the match is a real dependency or a coincidence. AI does this poorly because the answer isn't in any single file — it's in the _relationships between_ files, and those relationships aren't written down anywhere.
 
 **Errors arrive late and vague.** When the AI gets something wrong, the feedback is a runtime crash, a failing integration test, or a user bug report — not a precise "you changed X, which broke Y because Z expected a number but got a string." The AI can't self-correct from vague feedback.
 
@@ -90,16 +90,16 @@ AND e.properties->>'step_order' > (
 );
 ```
 
-The graph makes relationships *data* — queryable, traversable, indexable. Every architectural question the AI needs to answer is a query, not a search.
+The graph makes relationships _data_ — queryable, traversable, indexable. Every architectural question the AI needs to answer is a query, not a search.
 
 **The AI emits TypeScript functions + `.gln` flow definitions. It queries the graph to understand context. The type checker tells it exactly what's wrong.**
 
 ### Two File Types, One Graph
 
-| File Type | Contains | Source of Truth For |
-| --------- | -------- | ------------------- |
-| `.ts` | Entities (interfaces), Nodes (functions) | Types, signatures, implementations |
-| `.gln` | Flows (DAG wiring), Triggers (event bindings) | Structure, ordering, branching, composition |
+| File Type | Contains                                      | Source of Truth For                         |
+| --------- | --------------------------------------------- | ------------------------------------------- |
+| `.ts`     | Entities (interfaces), Nodes (functions)      | Types, signatures, implementations          |
+| `.gln`    | Flows (DAG wiring), Triggers (event bindings) | Structure, ordering, branching, composition |
 
 TypeScript is the single source of truth for types. The tooling uses the TypeScript Compiler API (`ts.createProgram`) to extract interfaces and function signatures into the graph. No type declarations are duplicated in `.gln` files. The `.gln` files reference nodes by name — the type checker resolves those names against the extracted signatures in the graph.
 
@@ -119,6 +119,7 @@ AI interacts with a GraphLang project through a three-part cycle: **Write**, **Q
 **Write.** The AI generates `.ts` files (entities and nodes) and `.gln` files (flows and triggers). TypeScript defines what each node does. `.gln` defines how nodes connect.
 
 **Query.** The AI uses CLI commands to understand the graph before modifying it:
+
 - `graphlang show <node>` — full node with edges and resolved types
 - `graphlang deps <node>` — what this node depends on
 - `graphlang impact <node>` — what depends on this node (blast radius)
@@ -128,6 +129,7 @@ AI interacts with a GraphLang project through a three-part cycle: **Write**, **Q
 These commands read from SQLite and return structured output. The AI doesn't need to parse source files to understand architecture — it queries the graph directly.
 
 **Validate.** Two checkers run in tandem:
+
 1. `graphlang check` — validates the graph: accumulated context types at each node, discriminated union branch coverage, flow composition types, fan-out element types, trigger payload types.
 2. `tsc --noEmit` — validates implementations: function bodies are correct TypeScript.
 
@@ -160,55 +162,55 @@ The feedback loop target: **under 1 second after every save**, with a ceiling of
 The graph is the hub. Every tool in the pipeline — the TypeScript extractor, `.gln` parser, type checker, and CLI query commands — reads from the same SQLite graph store. TypeScript files are analyzed for signatures; `.gln` files are parsed for flow structure; both are stored as nodes and edges in the graph.
 
 ```
-┌────────────────────────────────────────────────────────┐
+┌─────────────────────────────────────────────────────────┐
 │                     Source Files                        │
-│                                                        │
-│  .ts files                          .gln files         │
-│  (entities: interfaces,             (flows: DAG        │
-│   nodes: functions)                  wiring, triggers) │
-└──────────┬──────────────────────────────┬──────────────┘
+│                                                         │
+│  .ts files                          .gln files          │
+│  (entities: interfaces,             (flows: DAG         │
+│   nodes: functions)                  wiring, triggers)  │
+└──────────┬──────────────────────────────┬───────────────┘
            │                              │
            │ ts.createProgram             │ .gln parser
            │ (extract signatures)         │ (parse flows)
            │                              │
            ▼                              ▼
-    ┌─────────────────────────────────────────────┐
+    ┌──────────────────────────────────────────────┐
     │              Graph Store (SQLite)            │
-    │                                             │
+    │                                              │
     │  nodes: entities, functions, flows           │
     │  edges: flow steps, branches, fan-outs       │
-    │                                             │
+    │                                              │
     │  Accumulated context types computed per-node │
-    └──────────────────┬──────────────────────────┘
+    └──────────────────┬───────────────────────────┘
                        │
                        ▼
-    ┌─────────────────────────────────────────────┐
+    ┌──────────────────────────────────────────────┐
     │              Type Checker                    │
-    │                                             │
-    │  For each flow:                             │
-    │  • Build accumulated context at each step   │
-    │  • Validate node inputs exist in context    │
-    │  • Validate discriminated union branches    │
-    │  • Validate branch reconvergence            │
-    │  • Validate fan-out element types           │
-    │  • Validate flow composition types          │
-    │  • Validate trigger payload types           │
-    │                                             │
-    │  Output: errors[] OR valid graph            │
-    └──────────────────┬──────────────────────────┘
+    │                                              │
+    │  For each flow:                              │
+    │  • Build accumulated context at each step    │
+    │  • Validate node inputs exist in context     │
+    │  • Validate discriminated union branches     │
+    │  • Validate branch reconvergence             │
+    │  • Validate fan-out element types            │
+    │  • Validate flow composition types           │
+    │  • Validate trigger payload types            │
+    │                                              │
+    │  Output: errors[] OR valid graph             │
+    └──────────────────┬───────────────────────────┘
                        │
                        ▼
-    ┌─────────────────────────────────────────────┐
+    ┌──────────────────────────────────────────────┐
     │              CLI / Query / Runtime           │
-    │                                             │
-    │  graphlang check    — validate everything   │
-    │  graphlang show     — inspect a node        │
-    │  graphlang deps     — dependency analysis   │
-    │  graphlang impact   — blast radius          │
-    │  graphlang trace    — flow path + types     │
-    │  graphlang context  — context at a node     │
-    │  graphlang dev      — watch mode            │
-    └─────────────────────────────────────────────┘
+    │                                              │
+    │  graphlang check    — validate everything    │
+    │  graphlang show     — inspect a node         │
+    │  graphlang deps     — dependency analysis    │
+    │  graphlang impact   — blast radius           │
+    │  graphlang trace    — flow path + types      │
+    │  graphlang context  — context at a node      │
+    │  graphlang dev      — watch mode             │
+    └──────────────────────────────────────────────┘
 ```
 
 ### Why SQLite
@@ -279,9 +281,9 @@ A `--scan-all` flag is available for projects that prefer to organize differentl
 
 ```typescript
 // Pure node — synchronous, no I/O
-export function calculate_cart_total(input: {
-  cart: Cart;
-}): { subtotal: number } {
+export function calculate_cart_total(input: { cart: Cart }): {
+  subtotal: number;
+} {
   const subtotal = input.cart.items.reduce(
     (sum, item) => sum + item.unit_price * item.quantity,
     0,
@@ -298,12 +300,12 @@ export async function charge_payment(input: {
   shipping_cost: number;
   payment_token: string;
 }): Promise<
-  | { ok: true; charge_id: string; total: number }
-  | { ok: false; error: string }
+  { ok: true; charge_id: string; total: number } | { ok: false; error: string }
 > {
-  const total = Math.round(
-    (input.discounted_total + input.tax_amount + input.shipping_cost) * 100,
-  ) / 100;
+  const total =
+    Math.round(
+      (input.discounted_total + input.tax_amount + input.shipping_cost) * 100,
+    ) / 100;
   // Would call payment processor
   throw new Error("not implemented — requires payment provider");
 }
@@ -433,6 +435,7 @@ end
 Every flow declares its input and output types by referencing TypeScript types. The `→` operator connects nodes sequentially. The output of one node feeds into the accumulated context for the next.
 
 The type checker validates both directions:
+
 - **External**: does the trigger/caller provide the declared input type? Does the consumer expect the declared output type?
 - **Internal**: is the declared input sufficient for every node in the flow? Does the final accumulated context satisfy the declared output?
 
@@ -699,18 +702,18 @@ end
 
 The context evolves:
 
-| After Node | Context Adds | Cumulative Context |
-| --- | --- | --- |
-| _(input)_ | `user`, `cart`, `payment_token` | `{ user, cart, payment_token }` |
-| `verify_age` | `ok: true` | `{ user, cart, payment_token }` |
-| `calculate_cart_total` | `subtotal` | `{ user, cart, payment_token, subtotal }` |
-| `apply_case_discount` | `discount_amount`, `discounted_total` | `{ ..., discount_amount, discounted_total }` |
-| `apply_member_discount` | `member_discount`, `discounted_total` (overwrites) | `{ ..., member_discount }` |
-| `get_tax_rate` | `tax_rate` | `{ ..., tax_rate }` |
-| `calculate_alcohol_tax` | `tax_amount` | `{ ..., tax_amount }` |
-| `calculate_shipping` | `shipping_cost` | `{ ..., shipping_cost }` |
-| `generate_order_number` | `order_number` | `{ ..., order_number }` |
-| `charge_payment` (ok branch) | `charge_id`, `total` | `{ ..., charge_id, total }` |
+| After Node                   | Context Adds                                       | Cumulative Context                           |
+| ---------------------------- | -------------------------------------------------- | -------------------------------------------- |
+| _(input)_                    | `user`, `cart`, `payment_token`                    | `{ user, cart, payment_token }`              |
+| `verify_age`                 | `ok: true`                                         | `{ user, cart, payment_token }`              |
+| `calculate_cart_total`       | `subtotal`                                         | `{ user, cart, payment_token, subtotal }`    |
+| `apply_case_discount`        | `discount_amount`, `discounted_total`              | `{ ..., discount_amount, discounted_total }` |
+| `apply_member_discount`      | `member_discount`, `discounted_total` (overwrites) | `{ ..., member_discount }`                   |
+| `get_tax_rate`               | `tax_rate`                                         | `{ ..., tax_rate }`                          |
+| `calculate_alcohol_tax`      | `tax_amount`                                       | `{ ..., tax_amount }`                        |
+| `calculate_shipping`         | `shipping_cost`                                    | `{ ..., shipping_cost }`                     |
+| `generate_order_number`      | `order_number`                                     | `{ ..., order_number }`                      |
+| `charge_payment` (ok branch) | `charge_id`, `total`                               | `{ ..., charge_id, total }`                  |
 
 ### 6.3 Name Collisions
 
@@ -771,16 +774,16 @@ Every type error includes enough information for AI to self-correct:
 ```typescript
 interface TypeCheckError {
   level: "error" | "warning";
-  code: string;                    // e.g., "MISSING_CONTEXT_FIELD"
-  flow: string;                    // which flow
-  node: string;                    // which node in the flow
-  field?: string;                  // which field is missing/wrong
-  message: string;                 // human-readable description
-  expected?: string;               // what type was expected
-  received?: string;               // what type was found (or "missing")
-  source_file: string;             // .gln or .ts file
-  source_line?: number;            // line number if applicable
-  suggestions: string[];           // concrete fix suggestions
+  code: string; // e.g., "MISSING_CONTEXT_FIELD"
+  flow: string; // which flow
+  node: string; // which node in the flow
+  field?: string; // which field is missing/wrong
+  message: string; // human-readable description
+  expected?: string; // what type was expected
+  received?: string; // what type was found (or "missing")
+  source_file: string; // .gln or .ts file
+  source_line?: number; // line number if applicable
+  suggestions: string[]; // concrete fix suggestions
 }
 ```
 
@@ -814,9 +817,7 @@ Example errors:
   "message": "Node 'classify_product' returns a discriminated union on 'type' with variants ['single_bottle', 'wine_pack'] but branch 'wine_pack' is not handled",
   "source_file": "flows/add_to_cart.gln",
   "source_line": 2,
-  "suggestions": [
-    "Add a branch: | wine_pack → <handler_node>"
-  ]
+  "suggestions": ["Add a branch: | wine_pack → <handler_node>"]
 }
 ```
 
@@ -864,33 +865,33 @@ CREATE INDEX idx_nodes_type ON nodes(type);
 
 ### 8.2 Node Types
 
-| Type | Stored Properties |
-| --- | --- |
-| `entity` | Field names, field types, source interface |
-| `node` | Function name, input type (as JSON schema), output type (including union variants), `pure: boolean` |
-| `flow` | Flow name, node sequence, branch structure |
+| Type     | Stored Properties                                                                                   |
+| -------- | --------------------------------------------------------------------------------------------------- |
+| `entity` | Field names, field types, source interface                                                          |
+| `node`   | Function name, input type (as JSON schema), output type (including union variants), `pure: boolean` |
+| `flow`   | Flow name, node sequence, branch structure                                                          |
 
 ### 8.3 Edge Types
 
-| Type | Meaning | Properties |
-| --- | --- | --- |
-| `flow_step` | Node A precedes Node B in a flow | `step_order`, `flow_id` |
-| `branch` | Flow branches on a discriminant value | `discriminant_field`, `discriminant_value`, `flow_id` |
-| `fan_out` | Fan-out from a list field to a sub-flow | `field_name`, `flow_id` |
-| `triggers` | A trigger activates a flow | `trigger_type`, `trigger_config` |
-| `emits` | A flow emits an event | `event_name` |
-| `composes` | A flow calls another flow as a step | `flow_id` |
-| `uses_type` | A node references an entity type | `field_name`, `usage` (input/output) |
+| Type        | Meaning                                 | Properties                                            |
+| ----------- | --------------------------------------- | ----------------------------------------------------- |
+| `flow_step` | Node A precedes Node B in a flow        | `step_order`, `flow_id`                               |
+| `branch`    | Flow branches on a discriminant value   | `discriminant_field`, `discriminant_value`, `flow_id` |
+| `fan_out`   | Fan-out from a list field to a sub-flow | `field_name`, `flow_id`                               |
+| `triggers`  | A trigger activates a flow              | `trigger_type`, `trigger_config`                      |
+| `emits`     | A flow emits an event                   | `event_name`                                          |
+| `composes`  | A flow calls another flow as a step     | `flow_id`                                             |
+| `uses_type` | A node references an entity type        | `field_name`, `usage` (input/output)                  |
 
 ### 8.4 Configuration
 
 ```typescript
 import Database from "better-sqlite3";
 
-const db = new Database(":memory:");   // In-memory for dev/test
+const db = new Database(":memory:"); // In-memory for dev/test
 db.pragma("journal_mode = WAL");
 db.pragma("synchronous = NORMAL");
-db.pragma("cache_size = -64000");      // 64MB — entire graph fits in memory
+db.pragma("cache_size = -64000"); // 64MB — entire graph fits in memory
 ```
 
 ---
@@ -899,16 +900,16 @@ db.pragma("cache_size = -64000");      // 64MB — entire graph fits in memory
 
 ### 9.1 Commands
 
-| Command | Purpose |
-| --- | --- |
-| `graphlang check` | Run all type checking passes, report errors |
-| `graphlang check --format json` | Errors as JSON for AI consumption |
-| `graphlang show <name>` | Display a node/flow with full type information |
-| `graphlang deps <name>` | Show what a node/flow depends on |
-| `graphlang impact <name>` | Show what depends on a node (blast radius) |
-| `graphlang trace <flow>` | Show full flow path with accumulated context types at each step |
-| `graphlang context <flow> <node>` | Show the accumulated context at a specific node in a flow |
-| `graphlang dev` | Watch mode — incremental type checking on file save |
+| Command                           | Purpose                                                         |
+| --------------------------------- | --------------------------------------------------------------- |
+| `graphlang check`                 | Run all type checking passes, report errors                     |
+| `graphlang check --format json`   | Errors as JSON for AI consumption                               |
+| `graphlang show <name>`           | Display a node/flow with full type information                  |
+| `graphlang deps <name>`           | Show what a node/flow depends on                                |
+| `graphlang impact <name>`         | Show what depends on a node (blast radius)                      |
+| `graphlang trace <flow>`          | Show full flow path with accumulated context types at each step |
+| `graphlang context <flow> <node>` | Show the accumulated context at a specific node in a flow       |
+| `graphlang dev`                   | Watch mode — incremental type checking on file save             |
 
 ### 9.2 Watch Mode (`graphlang dev`)
 
@@ -918,6 +919,7 @@ Watch mode uses two incremental systems working together:
 2. **`.gln` file watcher** — watches `.gln` files, re-parses only changed flows, updates the graph
 
 On any change:
+
 1. Update the affected nodes/edges in SQLite
 2. Determine which type checking passes are affected
 3. Re-run only those passes
@@ -995,11 +997,11 @@ Steps 2 and 3 are independent and can run in parallel.
 
 ### 12.1 Test Layers
 
-| Layer | What It Tests | Speed |
-| --- | --- | --- |
-| Pure node tests | Individual sync functions with known inputs/outputs | Microseconds per test |
+| Layer              | What It Tests                                        | Speed                           |
+| ------------------ | ---------------------------------------------------- | ------------------------------- |
+| Pure node tests    | Individual sync functions with known inputs/outputs  | Microseconds per test           |
 | Flow context tests | Type checker correctly computes context at each step | Milliseconds (in-memory SQLite) |
-| Integration tests | Full flow execution with mocked impure nodes | Milliseconds |
+| Integration tests  | Full flow execution with mocked impure nodes         | Milliseconds                    |
 
 ### 12.2 Pure Node Tests
 
@@ -1013,15 +1015,27 @@ describe("calculate_cart_total", () => {
   it("sums item prices", () => {
     const result = calculate_cart_total({
       cart: {
-        id: "1", user_id: "u1",
+        id: "1",
+        user_id: "u1",
         items: [
-          { product_id: "w1", product_type: "single_bottle", quantity: 2, unit_price: 25.00 },
-          { product_id: "w2", product_type: "single_bottle", quantity: 1, unit_price: 40.00 },
+          {
+            product_id: "w1",
+            product_type: "single_bottle",
+            quantity: 2,
+            unit_price: 25.0,
+          },
+          {
+            product_id: "w2",
+            product_type: "single_bottle",
+            quantity: 1,
+            unit_price: 40.0,
+          },
         ],
-        created_at: "", updated_at: "",
+        created_at: "",
+        updated_at: "",
       },
     });
-    expect(result.subtotal).toBe(90.00);
+    expect(result.subtotal).toBe(90.0);
   });
 });
 ```
@@ -1033,10 +1047,15 @@ Use fixture `.gln` files and stub `.ts` signatures to test that the type checker
 ```typescript
 // Test: missing context field
 const graph = buildGraphFromFixtures({
-  nodes: { calculate_shipping: { input: { cart: "Cart" }, output: { shipping_cost: "number" } } },
-  flows: { bad_flow: ["calculate_shipping"] },  // no node provides 'cart' in context
+  nodes: {
+    calculate_shipping: {
+      input: { cart: "Cart" },
+      output: { shipping_cost: "number" },
+    },
+  },
+  flows: { bad_flow: ["calculate_shipping"] }, // no node provides 'cart' in context
   triggers: { "http.post('/test')": "bad_flow" },
-  triggerPayloads: { "http.post('/test')": {} },  // empty payload
+  triggerPayloads: { "http.post('/test')": {} }, // empty payload
 });
 
 const errors = typeCheck(graph);
@@ -1084,13 +1103,13 @@ This is a convention, not a requirement. The tooling discovers `.ts` and `.gln` 
 
 ## 14. Dependencies
 
-| Package | Version | Purpose |
-| --- | --- | --- |
-| `typescript` | ^5.4.0 | Compiler API for signature extraction |
-| `better-sqlite3` | ^11.0.0 | Graph store |
-| `vitest` | ^1.0.0 | Test runner |
-| `tsx` | ^4.0.0 | TypeScript execution |
-| `chokidar` | ^3.6.0 | File watching (for `graphlang dev`) |
+| Package          | Version | Purpose                               |
+| ---------------- | ------- | ------------------------------------- |
+| `typescript`     | ^5.4.0  | Compiler API for signature extraction |
+| `better-sqlite3` | ^11.0.0 | Graph store                           |
+| `vitest`         | ^1.0.0  | Test runner                           |
+| `tsx`            | ^4.0.0  | TypeScript execution                  |
+| `chokidar`       | ^3.6.0  | File watching (for `graphlang dev`)   |
 
 The framework itself is minimal. Runtime concerns (HTTP, persistence, email) are provided by separate library packages.
 
