@@ -1,0 +1,6 @@
+on http.post("/cart/add") → add_to_cart
+on http.post("/cart/update") → cart_updated
+on http.post("/checkout") → checkout
+
+on event(stock.changed) → stock_changed
+on event(order.placed) → send_order_confirmation

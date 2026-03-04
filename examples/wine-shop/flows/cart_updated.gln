@@ -1,0 +1,9 @@
+flow cart_updated
+  input CartUpdatedInput
+  output CartUpdatedOutput
+
+  calculate_cart_total
+  → apply_case_discount
+  → calculate_shipping
+  → estimate_delivery
+end

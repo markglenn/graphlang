@@ -1,0 +1,17 @@
+flow stock_changed
+  input StockChangedInput
+  output StockChangedOutput
+
+  find_affected_carts
+  → fan_out(carts, update_cart)
+end
+
+flow update_cart
+  input UpdateCartInput
+  output UpdateCartOutput
+
+  remove_unavailable_items
+  → calculate_cart_total
+  → calculate_shipping
+  → notify_user
+end

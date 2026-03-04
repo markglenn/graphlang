@@ -1,8 +1,0 @@
-constraint is_role
-  description "Check if authenticated user has a specific role"
-  params required_role : string
-  evaluate
-    traverse auth.user -> role as user_role
-    assert user_role == required_role
-  end
-end

@@ -1,0 +1,32 @@
+flow checkout
+  input CheckoutInput
+  output CheckoutOutput
+
+  verify_age
+  → calculate_cart_total
+  → apply_case_discount
+  → apply_member_discount
+  → get_tax_rate
+  → calculate_alcohol_tax
+  → calculate_shipping
+  → generate_order_number
+  → charge_payment
+    | ok → checkout_success
+    | error → checkout_payment_failed
+end
+
+flow checkout_success
+  input CheckoutSuccessInput
+  output CheckoutSuccessOutput
+
+  reserve_stock
+  → build_order
+  → emit order.placed
+end
+
+flow checkout_payment_failed
+  input CheckoutPaymentFailedInput
+  output CheckoutPaymentFailedOutput
+
+  release_stock
+end

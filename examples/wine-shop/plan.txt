@@ -1,0 +1,330 @@
+Wine Shop — GraphLang Reference App
+====================================
+
+ARCHITECTURE
+------------
+
+Two file types, one graph:
+
+  .ts files — everything executable
+    - Entities (interfaces/types — data shapes)
+    - Nodes (functions — units of work)
+    - Flow contracts (input/output types for each flow)
+    - Sync nodes are intended to be pure (enforced by lint)
+    - Async nodes are assumed impure
+
+  .gln files — the wiring
+    - Flows (typed DAGs connecting nodes)
+    - Every flow declares input/output types referencing TypeScript types
+    - The type checker validates every edge: output type matches next input type
+
+The tooling uses the TypeScript Compiler API to extract all types and
+function signatures into the graph (SQLite). The .gln parser adds flow
+edges and resolves input/output type references. The type checker
+validates that every connection is type-safe. Both are incremental
+in watch mode.
+
+Node discovery: by default scans nodes/ and entities/ directories.
+Configurable via graphlang.config.json. Keeps the graph clean for AI.
+
+
+FLOW CONTRACTS
+--------------
+
+Every flow declares its input and output types:
+
+  flow add_to_cart
+    input AddToCartInput
+    output AddToCartOutput
+
+    classify_product
+      | single_bottle → check_stock → add_bottle_to_cart
+      | wine_pack → check_pack_stock → add_pack_to_cart
+    → calculate_cart_total
+    → apply_case_discount
+    → calculate_shipping
+  end
+
+Types are defined in TypeScript (flows/contracts.ts). The .gln file
+references them by name — no type duplication, TypeScript stays the
+single source of truth.
+
+The type checker validates both directions:
+  - External: does the trigger/caller provide the declared input?
+  - Internal: is the declared input sufficient for all nodes?
+              Does the final context satisfy the declared output?
+
+
+DATA FLOW: ACCUMULATED CONTEXT
+--------------------------------
+
+Each flow has a context object that grows as nodes execute:
+
+  1. Flow starts with its declared input type as context
+  2. Each node's input fields are pulled from the context
+  3. Each node's output fields are merged back into the context
+  4. The type checker validates that every node's required input fields
+     exist in the context at that point in the flow
+  5. At flow end, validates the context satisfies the declared output
+
+Name collisions: last write wins. The type checker warns on shadowing.
+Recommended convention: use structured output keys (shipping: { cost })
+to reduce accidental collisions.
+
+
+FLOW EXECUTION MODEL
+---------------------
+
+Nodes can return discriminated unions. The graph branches on the
+discriminant. One mechanism handles all control flow:
+
+  Branching — a node returns a discriminant, the flow takes different paths:
+
+    classify_product
+      | single_bottle → check_stock → add_bottle_to_cart
+      | wine_pack → check_pack_stock → add_pack_to_cart
+    → calculate_totals
+
+  Branches can reconverge. Strict reconvergence: only fields present
+  in ALL branches survive. Branch-specific fields are dropped.
+
+  Error handling — ok/error is just one common discriminated union:
+
+    charge_payment
+      | ok → checkout_success
+      | error → checkout_payment_failed
+
+  The `ok` discriminant is special: unhandled ok: false short-circuits
+  automatically. Other discriminants require exhaustive branches.
+  `graphlang trace` annotates short-circuit points visibly.
+
+  Early return — memoization, caching, or any "skip the rest" case:
+
+    check_cache
+      | hit → done
+      | miss → load_cart → calculate_totals → calculate_shipping
+
+  `done` is a built-in: stop the flow, return the current context.
+  The type checker validates done's context satisfies the flow's
+  declared output type.
+
+All three are the same mechanism: a node returns a discriminated union,
+the graph routes explicitly. No hidden control flow. Every path is
+visible in the graph, every path is type-checked.
+
+
+ENTITIES (TypeScript interfaces)
+---------------------------------
+
+Wine:
+  id, name, winery, vintage, varietal, region, price, bottle_size_ml,
+  weight_oz, inventory_count, active
+
+WinePack:
+  id, name, description, wines (Wine[]), price, discount_percentage
+
+Cart:
+  id, user_id, items (CartItem[]), created_at, updated_at
+
+CartItem:
+  product_id, product_type ("single_bottle" | "wine_pack"),
+  quantity, unit_price
+
+Order:
+  id, order_number, user_id, items (CartItem[]), subtotal,
+  discount_amount, tax_amount, shipping_cost, total, status, created_at
+
+User:
+  id, email, name, date_of_birth, membership_tier, state
+
+
+NODES (TypeScript functions)
+----------------------------
+
+Cart:
+  - classify_product(product_id) → { type: "single_bottle", ... } | { type: "wine_pack", ... }
+  - add_bottle_to_cart(cart, product, quantity) → { cart }
+  - add_pack_to_cart(cart, pack, quantity) → { cart }
+  - remove_from_cart(cart, product_id) → { cart }
+  - calculate_cart_total(cart) → { subtotal }
+
+Shipping:
+  - calculate_shipping(cart) → { shipping_cost }
+    Rule: 6+ bottles = $1, under 6 = $15
+  - estimate_delivery(zip_code, shipping_cost) → { estimated_days }
+
+Inventory:
+  - check_stock(product_id, quantity) → ok/error
+  - check_pack_stock(bottles, quantity) → ok/error
+  - reserve_stock(cart) → ok { reservation_id } / error
+  - release_stock(reservation_id) → ok/error
+
+Pricing:
+  - apply_case_discount(cart, subtotal) → { discount_amount, discounted_total }
+    Rule: full case (12 bottles) = 10% off, half case (6) = 5% off
+  - apply_member_discount(discounted_total, user) → { member_discount, discounted_total }
+
+Tax:
+  - get_tax_rate(user) → { tax_rate }  (async — external API)
+  - calculate_alcohol_tax(discounted_total, tax_rate) → { tax_amount }
+
+Age verification:
+  - verify_age(user) → ok/error
+
+Order:
+  - build_order(cart, subtotal, discount_amount, member_discount,
+    tax_amount, shipping_cost, total, order_number, charge_id) → { order }
+  - generate_order_number() → { order_number }  (async)
+
+Payment (async/impure):
+  - charge_payment(discounted_total, tax_amount, shipping_cost,
+    payment_token) → ok { charge_id, total } / error
+
+Notifications (async/impure):
+  - send_order_confirmation(order, user) → ok/error
+  - notify_user(cart, product_id) → ok/error
+
+Stock management (async/impure):
+  - find_affected_carts(product_id) → { carts }
+  - remove_unavailable_items(cart, product_id) → { cart }
+
+
+FLOWS (.gln files)
+------------------
+
+add_to_cart (AddToCartInput → AddToCartOutput):
+  classify_product
+    | single_bottle → check_stock → add_bottle_to_cart
+    | wine_pack → check_pack_stock → add_pack_to_cart
+  → calculate_cart_total
+  → apply_case_discount
+  → calculate_shipping
+
+checkout (CheckoutInput → CheckoutOutput):
+  verify_age
+  → calculate_cart_total
+  → apply_case_discount
+  → apply_member_discount
+  → get_tax_rate
+  → calculate_alcohol_tax
+  → calculate_shipping
+  → generate_order_number
+  → charge_payment
+    | ok → checkout_success
+    | error → checkout_payment_failed
+
+  checkout_success (CheckoutSuccessInput → CheckoutSuccessOutput):
+    reserve_stock → build_order → emit order.placed
+
+  checkout_payment_failed (CheckoutPaymentFailedInput → CheckoutPaymentFailedOutput):
+    release_stock
+
+cart_updated (CartUpdatedInput → CartUpdatedOutput):
+  calculate_cart_total
+  → apply_case_discount
+  → calculate_shipping
+  → estimate_delivery
+
+stock_changed (StockChangedInput → StockChangedOutput):
+  find_affected_carts
+  → fan_out(carts, update_cart)
+
+  update_cart (UpdateCartInput → UpdateCartOutput):
+    remove_unavailable_items
+    → calculate_cart_total
+    → calculate_shipping
+    → notify_user
+
+
+FLOW CONTRACTS (TypeScript types in flows/contracts.ts)
+--------------------------------------------------------
+
+AddToCartInput:       { cart, product_id, quantity }
+AddToCartOutput:      { cart, subtotal, discount_amount, discounted_total, shipping_cost }
+
+CheckoutInput:        { user, cart, payment_token }
+CheckoutOutput:       { order }
+
+CheckoutSuccessInput: { cart, subtotal, discount_amount, member_discount,
+                        tax_amount, shipping_cost, total, order_number, charge_id }
+CheckoutSuccessOutput: { order }
+
+CheckoutPaymentFailedInput:  { reservation_id }
+CheckoutPaymentFailedOutput: { ok }
+
+CartUpdatedInput:     { cart, zip_code }
+CartUpdatedOutput:    { subtotal, discount_amount, discounted_total, shipping_cost, estimated_days }
+
+StockChangedInput:    { product_id }
+StockChangedOutput:   { carts }
+
+UpdateCartInput:      { cart, product_id }
+UpdateCartOutput:     { cart, subtotal, shipping_cost }
+
+
+TRIGGERS (triggers.gln)
+------------------------
+
+  on http.post("/cart/add") → add_to_cart
+  on http.post("/cart/update") → cart_updated
+  on http.post("/checkout") → checkout
+
+  on event(stock.changed) → stock_changed
+  on event(order.placed) → send_order_confirmation
+
+The type checker validates that trigger payloads match the target
+flow's declared input type.
+
+
+FLOW COMPOSITION
+-----------------
+
+Flows compose. A flow can call another flow as if it were a node.
+The called flow's declared input type is what it needs from context;
+its declared output type is what it adds back.
+
+This means flows are reusable: add_to_cart can be called from checkout,
+from an API endpoint, or from another flow.
+
+
+FAN-OUT
+-------
+
+When a node returns a list and each item needs the same processing,
+use fan_out(field, flow):
+
+  flow stock_changed
+    input StockChangedInput
+    output StockChangedOutput
+
+    find_affected_carts
+    → fan_out(carts, update_cart)
+  end
+
+fan_out takes a field name (the list to iterate) and a flow to run for
+each item. The type checker validates that the field is a list of T and
+T satisfies the target flow's declared input type.
+
+Each run is independent — if one fails, the rest still process. Errors
+are collected and returned as a list.
+
+
+EXTENSIBILITY
+--------------
+
+GraphLang doesn't own persistence, HTTP, email, or any external concern.
+Libraries provide nodes, GraphLang wires them.
+
+A library is just an npm package that exports typed functions. A node in
+the project can import from any library:
+
+  import { upsert } from "@graphlang/sqlite";
+
+  export async function save_cart(input: { cart: Cart }): Promise<...> {
+    return upsert({ table: "carts", data: input.cart });
+  }
+
+The tooling extracts the function signature, adds it to the graph, sees
+it's async (impure), and validates the types. No plugin system, no adapter
+registry. A library is a package. A node is a function. TypeScript types
+are the contract.

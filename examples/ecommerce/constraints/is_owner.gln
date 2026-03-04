@@ -1,9 +1,0 @@
-constraint is_owner
-  description "Check if authenticated user owns the target entity"
-  params target_entity : entity
-  evaluate
-    traverse auth.user -> id as auth_id
-    traverse target_entity -> user -> id as owner_id
-    assert auth_id == owner_id
-  end
-end

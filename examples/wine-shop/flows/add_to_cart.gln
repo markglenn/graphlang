@@ -1,0 +1,11 @@
+flow add_to_cart
+  input AddToCartInput
+  output AddToCartOutput
+
+  classify_product
+    | single_bottle → check_stock → add_bottle_to_cart
+    | wine_pack → check_pack_stock → add_pack_to_cart
+  → calculate_cart_total
+  → apply_case_discount
+  → calculate_shipping
+end
