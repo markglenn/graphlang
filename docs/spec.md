@@ -57,6 +57,21 @@ These queries run against a SQLite graph — they're instant, complete, and prec
 
 **This is the core bet: AI that can query architecture is fundamentally more reliable than AI that must infer it.** The graph makes the blast radius of any change knowable before making it. The type checker makes every mistake catchable with specific, actionable feedback. Together, they close the loop that traditional codebases leave open.
 
+### No Human Authors
+
+GraphLang is not designed for humans to read or write. It is designed for AI to read and write, and for humans to direct.
+
+Humans interact through natural language ("add age verification before checkout") or through a visual editor (drag a node into a flow). The AI translates intent into `.gln` files and TypeScript functions. The type checker validates the result. The human sees the outcome — a working application, a visual flow diagram, a failing type error — and gives the next instruction.
+
+The text files exist because they're the best format for AI to manipulate and for git to version — not because anyone is expected to hand-author them. The `.gln` syntax doesn't need to be human-ergonomic. It needs to be unambiguous, parseable, and diffable. TypeScript was chosen because AI writes it reliably, not because developers prefer it.
+
+This framing drives every design decision:
+
+- **The type checker is the AI's feedback loop**, not a developer tool. Its errors are structured for machine consumption (JSON output, error codes, fix suggestions).
+- **CLI query commands are the AI's read interface**, not a developer convenience. `graphlang context checkout charge_payment` gives the AI exactly the information it needs to make a safe modification.
+- **The visual editor is the human's interface** to the application. Humans see flows as diagrams, inspect nodes by clicking, and direct changes in natural language. The underlying `.gln` and `.ts` files are an implementation detail.
+- **Git diffability matters** because AI makes frequent, incremental changes. Text files diff cleanly, merge predictably, and maintain history. A proprietary binary format (like most low-code platforms use) would make version control useless.
+
 ### What GraphLang Is (and Isn't)
 
 GraphLang is a typed DAG framework. It handles two concerns:
@@ -114,11 +129,11 @@ The tooling detects sync vs async from the return type (`T` vs `Promise<T>`). No
 
 ### The AI Interaction Model
 
-AI interacts with a GraphLang project through a three-part cycle: **Write**, **Query**, and **Validate**.
+The AI is the sole author of all code. Humans provide intent ("add age verification before checkout"); the AI translates that into graph modifications. The interaction cycle has three phases: **Write**, **Query**, and **Validate**.
 
-**Write.** The AI generates `.ts` files (entities and nodes) and `.gln` files (flows and triggers). TypeScript defines what each node does. `.gln` defines how nodes connect.
+**Write.** The AI generates `.ts` files (entities and nodes) and `.gln` files (flows and triggers). No human writes or edits these files directly.
 
-**Query.** The AI uses CLI commands to understand the graph before modifying it:
+**Query.** Before making changes, the AI queries the graph to understand what exists and what a change will affect:
 
 - `graphlang show <node>` — full node with edges and resolved types
 - `graphlang deps <node>` — what this node depends on
@@ -147,13 +162,14 @@ The feedback loop target: **under 1 second after every save**, with a ceiling of
 
 ### What This Prototype Should Prove
 
-1. The graph externalizes application architecture in a form AI can query
-2. CLI query commands give AI a structured read interface to the full architecture
+1. AI can build and maintain a full application through graph queries + type checker feedback alone — no human code review required for correctness
+2. The graph externalizes application architecture in a form AI can query without loading the full codebase into context
 3. The type system catches cross-boundary errors (context field missing, type mismatch, branch not handled)
-4. Error feedback is specific enough that AI can self-correct in 1-2 iterations
+4. Error feedback is specific enough that AI can self-correct in 1-2 iterations without human intervention
 5. Discriminated unions + accumulated context handle all real control flow patterns
 6. Flow composition scales — large applications decompose into small, reusable flows
 7. The type check + test feedback loop completes in under 3 seconds
+8. A visual editor can render `.gln` flows as diagrams, making the underlying text files invisible to human operators
 
 ---
 
@@ -1158,13 +1174,22 @@ The framework itself is minimal. Runtime concerns (HTTP, persistence, email) are
 
 ## 17. Future Directions
 
-- **Visual graph editor** — drag-and-drop flow builder with live type checking
-- **AI copilot** — natural language → flow modifications with type checker in the loop
-- **Graph diffing** — semantic diffs: "added node verify_age to checkout flow"
+### Human Interface
+
+- **Visual flow editor** — the primary human interface. Reads/writes `.gln` files. Flows rendered as diagrams, nodes as cards with typed input/output. Click a node to see accumulated context. Live type checking on every change. The visual editor and AI share the same SQLite query interface.
+- **Natural language interface** — "add age verification before checkout" → AI queries the graph, generates the node and flow change, type checker validates, visual editor updates. The human never sees `.gln` syntax.
+- **Graph diffing** — semantic diffs in the visual editor: "added node verify_age to checkout flow between step 0 and step 1" instead of text diffs
+
+### AI Capabilities
+
+- **Autonomous modification** — AI makes changes, runs `graphlang check`, self-corrects from errors, repeats until valid. Human approves the final result, not each intermediate step.
 - **Ahead-of-time optimization** — analyze flows for parallelizable steps, pre-compute context types
+- **Automated test generation** — AI generates test cases for every node and flow from the graph structure and type information
+
+### Platform
+
 - **Cross-project composition** — import flows and nodes from other GraphLang projects as typed dependencies
 - **Flow versioning** — run multiple versions of a flow simultaneously (A/B testing, gradual rollout)
 - **Replay and debugging** — record flow executions with full context at each step, replay for debugging
-- **Generic flows** — parameterized flows that work with any entity type matching a constraint
-- **Flow-level contracts** — pre/post conditions on flows (not just nodes) for additional validation
 - **Runtime observability** — automatic tracing, metrics, and logging derived from the graph structure
+- **Generic flows** — parameterized flows that work with any entity type matching a constraint

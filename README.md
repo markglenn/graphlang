@@ -4,7 +4,9 @@ A research framework exploring a core thesis: **applications defined as typed gr
 
 ## What Is This?
 
-GraphLang is an experimental, AI-native application framework. It is not production software. It is a research prototype designed to test whether externalizing application architecture into a typed, queryable graph creates a feedback loop tight enough for AI to reliably self-correct.
+GraphLang is an experimental framework for **100% AI-authored applications**. Humans direct; AI builds. No one hand-writes `.gln` files or TypeScript nodes — the AI generates them from natural language instructions, the type checker validates the result, and the human sees a working application or a precise error.
+
+The text files (`.ts`, `.gln`) exist because they're the best format for AI to manipulate and for git to version — not because anyone is expected to read or write them. The human interface is natural language and (eventually) a visual flow editor. The AI interface is structured queries and typed feedback.
 
 ### The Problem
 
@@ -35,11 +37,11 @@ The AI doesn't load 2,000 files into context. It queries the graph for the preci
 
 ## The Approach
 
-Two file types, one graph:
+Two file types, one graph. Both are AI-written:
 
-**TypeScript files** — everything executable. Entities are interfaces (data shapes). Nodes are functions (units of work). Sync functions are pure; async functions are impure. TypeScript is the single source of truth for types.
+**TypeScript files** — everything executable. Entities are interfaces (data shapes). Nodes are functions (units of work). Sync functions are pure; async functions are impure. TypeScript is the single source of truth for types. AI writes it reliably — it's the language AI knows best.
 
-**`.gln` files** — the wiring. Flows define typed DAGs connecting nodes. Every flow declares its input and output types, referencing TypeScript types by name. The type checker validates every connection.
+**`.gln` files** — the wiring. Flows define typed DAGs connecting nodes. Every flow declares its input and output types, referencing TypeScript types by name. The syntax is minimal and unambiguous — optimized for AI generation and git diffing, not human ergonomics.
 
 ```
 flow checkout
@@ -82,11 +84,12 @@ Early prototype. The specification is written; implementation has not started.
 
 ## Research Questions
 
-1. Does externalizing architecture into a typed graph reduce the error rate of AI-generated code?
-2. Are type errors specific enough that AI can self-correct in 1–2 iterations?
-3. Do accumulated context + discriminated unions handle all real control flow patterns?
+1. Can AI build and maintain a full application through graph queries + type checker feedback alone?
+2. Does externalizing architecture into a typed graph reduce the error rate of AI-generated code?
+3. Are type errors specific enough that AI can self-correct in 1–2 iterations without human intervention?
 4. Is the feedback loop (type check + tests) fast enough? Target: under 1 second per save.
 5. Does flow composition scale — can large applications decompose into small, reusable flows?
+6. Can a visual editor over `.gln` files replace traditional IDEs for human oversight?
 
 ## License
 
