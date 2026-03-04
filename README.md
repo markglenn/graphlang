@@ -1,35 +1,92 @@
 # GraphLang
 
-A research programming language and framework exploring a core thesis: **applications defined as typed graphs are more reliably authored and modified by AI than traditional codebases.**
+A research framework exploring a core thesis: **applications defined as typed graphs are more reliably authored and modified by AI than traditional codebases.**
 
 ## What Is This?
 
-GraphLang is an experimental, AI-native application framework. It is not production software. It is a research prototype designed to test whether a sufficiently expressive type system — applied across an entire application graph — can create a feedback loop tight enough for AI to reliably self-correct.
+GraphLang is an experimental, AI-native application framework. It is not production software. It is a research prototype designed to test whether externalizing application architecture into a typed, queryable graph creates a feedback loop tight enough for AI to reliably self-correct.
 
-The central bet: the problem with AI-generated code isn't the AI. It's that traditional codebases have implicit relationships scattered across files, frameworks, and language boundaries that no single tool can validate end-to-end. GraphLang makes every relationship explicit and typed, then checks all of them at once.
+### The Problem
+
+AI is good at writing individual functions. It struggles with *systems* — the connections between functions, the data flowing across boundaries, the downstream consequences of a change.
+
+In a 2,000-file application, the AI can't fit everything into its context window. It has to guess which files are relevant, read a subset, infer relationships from import chains and naming conventions, and hope it found everything. It usually hasn't. The files it missed are where the bugs hide.
+
+Rename a field on an entity. Which flows break? Which downstream nodes consume that field? In a traditional codebase, answering this requires a full-text search across every file and manual interpretation of each match. AI does this poorly because the answer isn't in any single file — it's in the *relationships between* files.
+
+### The Bet
+
+GraphLang makes architecture queryable instead of inferrable:
+
+```bash
+$ graphlang impact calculate_shipping
+Used in flows: checkout, cart_updated, stock_changed/update_cart
+Downstream nodes: estimate_delivery (reads shipping_cost)
+
+$ graphlang context checkout charge_payment
+charge_payment needs:
+  discounted_total  ← apply_member_discount (step 4)
+  tax_amount        ← calculate_alcohol_tax (step 6)
+  shipping_cost     ← calculate_shipping (step 7)
+  payment_token     ← CheckoutInput (flow input)
+```
+
+The AI doesn't load 2,000 files into context. It queries the graph for the precise answer to an architectural question. The type checker catches every mistake with specific, actionable feedback. Together, they close the loop that traditional codebases leave open.
 
 ## The Approach
 
-Applications are defined in two layers:
+Two file types, one graph:
 
-**The Graph Layer** — a declarative DSL (`.gln` files) describing the entire application as a typed graph: data entities, relationships, UI projections, business logic behaviors, access policies, and external service contracts. The graph handles *what connects to what*. It is not Turing complete by design.
+**TypeScript files** — everything executable. Entities are interfaces (data shapes). Nodes are functions (units of work). Sync functions are pure; async functions are impure. TypeScript is the single source of truth for types.
 
-**The Compute Layer** — small, pure TypeScript functions handling actual computation: math, string processing, validation, data transformation. Bounded, testable, side-effect-free.
+**`.gln` files** — the wiring. Flows define typed DAGs connecting nodes. Every flow declares its input and output types, referencing TypeScript types by name. The type checker validates every connection.
 
-The type checker validates every edge in the graph — from UI field to behavior input to entity mutation to external adapter call — as one unified, cross-boundary type check. A renamed field, a mismatched parameter, a missing required value: all caught at build time, all reported with errors specific enough for an AI to self-correct.
+```
+flow checkout
+  input CheckoutInput
+  output CheckoutOutput
+
+  verify_age
+  → calculate_cart_total
+  → apply_case_discount
+  → apply_member_discount
+  → get_tax_rate
+  → calculate_alcohol_tax
+  → calculate_shipping
+  → generate_order_number
+  → charge_payment
+    | ok → checkout_success
+    | error → checkout_payment_failed
+end
+```
+
+The tooling uses the TypeScript Compiler API to extract all type and function signatures into a SQLite graph. The `.gln` parser adds flow edges. The type checker validates that every connection is type-safe — from trigger payload to node input to branching logic to downstream effects.
+
+Everything else — persistence, HTTP, email, rendering — lives in libraries. GraphLang owns two concerns: typed nodes and typed flows.
+
+## Key Concepts
+
+- **Accumulated context** — each flow maintains a growing context object. Nodes pull input fields from context and merge output fields back. The type checker validates field availability at every step.
+- **Discriminated unions** — one mechanism for all control flow. Branching, error handling, and early returns all work the same way: a node returns a union, the graph routes on the discriminant.
+- **Flow contracts** — every flow declares `input` and `output` types. The type checker validates both externally (does the caller provide the input?) and internally (does the accumulated context satisfy the output?).
+- **Railway-oriented errors** — nodes returning `{ ok: false }` short-circuit the flow automatically unless explicitly handled. Other discriminants require exhaustive branches.
+- **Flow composition** — flows can call other flows as if they were nodes. `fan_out(field, flow)` iterates a list through a sub-flow.
+- **SQLite as query engine** — the graph is stored in SQLite, making every architectural question a SQL query. "What flows use this node?" is a join, not custom traversal code.
 
 ## Status
 
-Early prototype. The specification is being written before the implementation.
+Early prototype. The specification is written; implementation has not started.
 
-See the **[full specification](docs/spec.md)** for the complete design: the type system, DSL syntax, graph store, compute layer, build pipeline, and implementation plan.
+- **[Full specification](docs/spec.md)** — the type system, flow syntax, graph store, data flow model, and tooling design.
+- **[Wine shop example](examples/wine-shop/)** — a reference application with 5 entities, 23 nodes, 5 flows, and flow contract types demonstrating the architecture.
 
 ## Research Questions
 
-1. Does a comprehensive type system reduce the error rate of AI-generated application code?
-2. Are errors specific enough that AI can self-correct in 1–2 iterations without human intervention?
-3. Can an entire application's architecture — UI, logic, data, access control, external services — be expressed as a typed graph?
-4. Is the feedback loop (type check + tests) fast enough to be useful? Target: under 1 second per save.
+1. Does externalizing architecture into a typed graph reduce the error rate of AI-generated code?
+2. Are type errors specific enough that AI can self-correct in 1–2 iterations?
+3. Do accumulated context + discriminated unions handle all real control flow patterns?
+4. Is the feedback loop (type check + tests) fast enough? Target: under 1 second per save.
+5. Does flow composition scale — can large applications decompose into small, reusable flows?
 
 ## License
 

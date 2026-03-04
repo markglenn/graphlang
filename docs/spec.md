@@ -10,25 +10,87 @@
 
 ## 1. Vision & Core Thesis
 
-Today's AI writes code designed for humans to read and maintain. This is wasteful — the AI is constrained by human-ergonomic syntax, and the output is fragile because imperative code has implicit relationships that AI can't reliably track.
+### The Problem: AI Can't See Architecture
 
-GraphLang splits application development into two layers:
+AI is remarkably good at writing individual functions. It struggles with *systems* — the connections between functions, the data flowing across boundaries, the downstream consequences of a change.
+
+The root cause isn't AI capability. It's that traditional codebases hide architecture:
+
+**Architecture is implicit and scattered.** In a typical application, "what happens when a user checks out" spans dozens of files across multiple layers — route handlers, middleware, service classes, database queries, queue producers, email templates. Understanding the full flow requires reading all of them. Modifying it safely requires understanding which of those files depend on which others.
+
+**AI context windows are finite.** A 2,000-file application can't fit in any context window. The AI has to guess which files are relevant, read a subset, infer relationships from import chains and naming conventions, and hope it found everything. It usually hasn't. The files it missed are where the bugs hide.
+
+**Changes cascade invisibly.** Rename a field on an entity. Which API endpoints break? Which downstream services consume that field? Which flows depend on it? In a traditional codebase, answering this requires a full-text search across every file, manual interpretation of each match, and judgment about whether the match is a real dependency or a coincidence. AI does this poorly because the answer isn't in any single file — it's in the *relationships between* files, and those relationships aren't written down anywhere.
+
+**Errors arrive late and vague.** When the AI gets something wrong, the feedback is a runtime crash, a failing integration test, or a user bug report — not a precise "you changed X, which broke Y because Z expected a number but got a string." The AI can't self-correct from vague feedback.
+
+These problems compound at scale. A 50-file project is manageable. A 2,000-file project is where AI assistance becomes both most valuable and least reliable.
+
+### The Thesis: Make Architecture Queryable
+
+GraphLang externalizes application architecture into a typed, queryable graph. Instead of inferring relationships by reading source files, AI queries the graph directly:
+
+```bash
+# "What breaks if I rename this field?"
+$ graphlang impact calculate_shipping
+Used in flows: checkout, cart_updated, stock_changed/update_cart
+Downstream nodes: estimate_delivery (reads shipping_cost)
+Triggers affected: http.post("/checkout"), http.post("/cart/update")
+
+# "What does this node need, and where does each field come from?"
+$ graphlang context checkout charge_payment
+charge_payment needs:
+  discounted_total  ← apply_member_discount (step 4)
+  tax_amount        ← calculate_alcohol_tax (step 6)
+  shipping_cost     ← calculate_shipping (step 7)
+  payment_token     ← CheckoutInput (flow input)
+
+# "Show me the full checkout flow with types at each step"
+$ graphlang trace checkout
+  verify_age             [may short-circuit: ok/error]  needs: { user }
+  → calculate_cart_total                                needs: { cart }
+  → apply_case_discount                                 needs: { cart, subtotal }
+  → ...
+```
+
+These queries run against a SQLite graph — they're instant, complete, and precise. The AI doesn't load 2,000 files into its context. It loads the answer to a specific architectural question.
+
+**This is the core bet: AI that can query architecture is fundamentally more reliable than AI that must infer it.** The graph makes the blast radius of any change knowable before making it. The type checker makes every mistake catchable with specific, actionable feedback. Together, they close the loop that traditional codebases leave open.
+
+### What GraphLang Is (and Isn't)
+
+GraphLang is a typed DAG framework. It handles two concerns:
 
 1. **Nodes** — TypeScript functions that do work. Pure functions are synchronous. Impure functions (I/O, external services) are asynchronous. TypeScript's own type system defines the contracts.
 
-2. **Flows** — `.gln` files that wire nodes into typed DAGs. Each flow defines which nodes run, in what order, and how data routes between them. The type checker validates every connection.
+2. **Flows** — `.gln` files that wire nodes into typed DAGs. Each flow defines which nodes run, in what order, and how data routes between them. Every flow declares its input and output types. The type checker validates every connection.
 
 The graph is NOT Turing complete on its own, and that's by design. The graph excels at structure and flow. TypeScript functions excel at computation. Each does what it's best at.
 
-### The Graph Is the Innovation
+Everything else — persistence, HTTP, email, rendering — lives in libraries. GraphLang doesn't try to be a web framework. It's the typed wiring layer that makes AI modification safe.
 
-By externalizing application architecture into explicit, typed edges, the graph makes every relationship visible, queryable, and checkable. The type system is the powerful consequence — it's what the graph's explicitness _enables_.
+### Why a Graph
 
-In a traditional codebase, architecture is implicit. A form submission connects to a payment processor that updates inventory, but those connections cross file boundaries, cross module boundaries, and are invisible to any single tool. No type checker can verify them because no tool can even _see_ them.
+In a traditional codebase, answering "what depends on this?" requires reading source files. In a GraphLang project, it's a SQL query:
 
-In a GraphLang graph, **every connection is a typed edge**. Every edge has types on both ends. The entire application flow — from HTTP trigger to node input to branching logic to downstream effects — is one unified type-checked structure. A renamed field, a mismatched parameter, a wrong type on a binding — all caught at build time, all reported with specific, actionable errors.
+```sql
+-- Every flow that uses calculate_shipping
+SELECT f.id FROM nodes f
+JOIN edges e ON e.from_node = f.id
+WHERE f.type = 'flow' AND e.to_node = 'calculate_shipping';
 
-This is what makes the graph AI-friendly. Not the syntax. Not the declarative style. The fact that architecture is explicit and enumerable — the AI can query what depends on what — and the type system gives immediate, precise feedback when something doesn't fit.
+-- Every node downstream of calculate_shipping in the checkout flow
+SELECT n.id FROM edges e
+JOIN nodes n ON n.id = e.to_node
+WHERE e.type = 'flow_step' AND e.properties->>'flow_id' = 'checkout'
+AND e.properties->>'step_order' > (
+  SELECT e2.properties->>'step_order' FROM edges e2
+  WHERE e2.to_node = 'calculate_shipping'
+  AND e2.properties->>'flow_id' = 'checkout'
+);
+```
+
+The graph makes relationships *data* — queryable, traversable, indexable. Every architectural question the AI needs to answer is a query, not a search.
 
 **The AI emits TypeScript functions + `.gln` flow definitions. It queries the graph to understand context. The type checker tells it exactly what's wrong.**
 
